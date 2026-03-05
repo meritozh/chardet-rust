@@ -51,17 +51,28 @@ impl DetectionResult {
     pub fn to_py_dict(&self, py: Python, apply_rename: bool) -> PyResult<PyObject> {
         let dict = PyDict::new(py);
         
-        let encoding = if apply_rename {
-            self.encoding.as_ref()
-                .map(|e| apply_legacy_rename(e))
-                .unwrap_or_default()
+        // Handle encoding - None should be Python None, not empty string
+        let encoding_obj: PyObject = if let Some(ref enc) = self.encoding {
+            let enc_str = if apply_rename {
+                apply_legacy_rename(enc)
+            } else {
+                enc.clone()
+            };
+            enc_str.into_py(py)
         } else {
-            self.encoding.clone().unwrap_or_default()
+            py.None()
         };
         
-        dict.set_item("encoding", encoding)?;
+        // Handle language - None should be Python None, not empty string
+        let language_obj: PyObject = if let Some(ref lang) = self.language {
+            lang.clone().into_py(py)
+        } else {
+            py.None()
+        };
+        
+        dict.set_item("encoding", encoding_obj)?;
         dict.set_item("confidence", self.confidence)?;
-        dict.set_item("language", self.language.clone().unwrap_or_default())?;
+        dict.set_item("language", language_obj)?;
         
         Ok(dict.into())
     }

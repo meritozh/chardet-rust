@@ -20,6 +20,11 @@ pub fn run_pipeline(
         return vec![DetectionResult::new(Some("utf-8"), 0.10, None)];
     }
     
+    // Stage 0: Binary detection - run first to avoid misclassifying binary files
+    if binary::is_binary(data, max_bytes) {
+        return vec![DetectionResult::new(None, DETERMINISTIC_CONFIDENCE, None)];
+    }
+    
     // Stage 1a: BOM detection
     if let Some(result) = bom::detect_bom(data) {
         return vec![result];
@@ -45,11 +50,6 @@ pub fn run_pipeline(
     
     // Pre-check UTF-8
     let utf8_precheck = utf8::detect_utf8(data);
-    
-    // Stage 0: Binary detection
-    if utf8_precheck.is_none() && binary::is_binary(data, max_bytes) {
-        return vec![DetectionResult::new(None, DETERMINISTIC_CONFIDENCE, None)];
-    }
     
     // Stage 1b: Markup charset extraction
     if let Some(result) = markup::detect_markup_charset(data) {

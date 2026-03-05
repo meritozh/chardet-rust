@@ -11,6 +11,7 @@ pub mod pipeline;
 pub mod models;
 pub mod equivalences;
 pub mod detector;
+pub mod bigram_models;
 
 use crate::enums::EncodingEra;
 use crate::detector::{detect_bytes, detect_all_bytes};
@@ -90,6 +91,10 @@ pub fn detect_all(
 fn _chardet_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", "7.0.0")?;
     
+    // Initialize bigram models from embedded data
+    // Note: models.bin should be at src/chardet/models/models.bin relative to project root
+    // For now, we'll try to load it at runtime
+    
     // Add main functions
     m.add_wrapped(wrap_pyfunction!(detect))?;
     m.add_wrapped(wrap_pyfunction!(detect_all))?;
@@ -100,6 +105,19 @@ fn _chardet_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     
     // Add detector class
     m.add_class::<detector::UniversalDetector>()?;
+    
+    // Add model loading function
+    #[pyfn(m)]
+    fn _load_models(data: &[u8]) -> PyResult<()> {
+        bigram_models::init_models(data)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))
+    }
+    
+    // Add function to check if models are loaded
+    #[pyfn(m)]
+    fn _models_loaded() -> bool {
+        bigram_models::models_loaded()
+    }
     
     Ok(())
 }

@@ -2,12 +2,36 @@
 
 from __future__ import annotations
 
+import importlib.resources
+import warnings
+
 from chardet_rs._chardet_rs import detect as _detect_rs
 from chardet_rs._chardet_rs import detect_all as _detect_all_rs
 from chardet_rs._chardet_rs import UniversalDetector as _UniversalDetectorRs
 from chardet_rs._chardet_rs import EncodingEra, LanguageFilter
+from chardet_rs._chardet_rs import _load_models, _models_loaded
 
 __version__ = "7.0.0"
+
+# Load bigram models at module initialization
+def _init_models():
+    """Load statistical bigram models from models.bin."""
+    try:
+        # Try to load from the chardet package
+        ref = importlib.resources.files("chardet.models").joinpath("models.bin")
+        if ref.exists():
+            data = ref.read_bytes()
+            if data:
+                _load_models(data)
+                return True
+    except Exception as e:
+        # Silently continue - models are optional
+        pass
+    
+    return False
+
+# Initialize models (optional - fall back to simplified scoring if not available)
+_init_models()
 
 DEFAULT_MAX_BYTES: int = 200_000
 MINIMUM_THRESHOLD: float = 0.20
