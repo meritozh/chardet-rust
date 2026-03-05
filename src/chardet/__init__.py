@@ -2,25 +2,26 @@
 
 from __future__ import annotations
 
-from chardet._utils import (
-    _DEFAULT_CHUNK_SIZE,
+import warnings
+
+# Import from the Rust implementation
+from chardet_rs._chardet_rs import (
+    detect as _detect_rs,
+    detect_all as _detect_all_rs,
+)
+from chardet_rs import (
     DEFAULT_MAX_BYTES,
     MINIMUM_THRESHOLD,
-    _validate_max_bytes,
-    _warn_deprecated_chunk_size,
+    EncodingEra,
+    LanguageFilter,
+    UniversalDetector,
 )
 from chardet._version import __version__
-from chardet.detector import UniversalDetector
-from chardet.enums import EncodingEra, LanguageFilter
-from chardet.equivalences import apply_legacy_rename
-from chardet.pipeline import DetectionDict, DetectionResult
-from chardet.pipeline.orchestrator import run_pipeline
 
 __all__ = [
     "DEFAULT_MAX_BYTES",
     "MINIMUM_THRESHOLD",
     "DetectionDict",
-    "DetectionResult",
     "EncodingEra",
     "LanguageFilter",
     "UniversalDetector",
@@ -29,12 +30,39 @@ __all__ = [
     "detect_all",
 ]
 
+# Type alias for backward compatibility
+from typing import TypedDict
+
+
+class DetectionDict(TypedDict):
+    """Dictionary representation of a detection result."""
+    encoding: str | None
+    confidence: float
+    language: str | None
+
+
+def _warn_deprecated_chunk_size(chunk_size: int, stacklevel: int = 3) -> None:
+    """Emit a deprecation warning if chunk_size differs from the default."""
+    if chunk_size != 65536:
+        warnings.warn(
+            "chunk_size is not used in this version of chardet and will be ignored",
+            DeprecationWarning,
+            stacklevel=stacklevel,
+        )
+
+
+def _validate_max_bytes(max_bytes: int) -> None:
+    """Raise ValueError if max_bytes is not a positive integer."""
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes < 1:
+        msg = "max_bytes must be a positive integer"
+        raise ValueError(msg)
+
 
 def detect(
     byte_str: bytes | bytearray,
     should_rename_legacy: bool = True,
     encoding_era: EncodingEra = EncodingEra.ALL,
-    chunk_size: int = _DEFAULT_CHUNK_SIZE,
+    chunk_size: int = 65536,
     max_bytes: int = DEFAULT_MAX_BYTES,
 ) -> DetectionDict:
     """Detect the encoding of the given byte string.
@@ -54,20 +82,22 @@ def detect(
     """
     _warn_deprecated_chunk_size(chunk_size)
     _validate_max_bytes(max_bytes)
+    
     data = byte_str if isinstance(byte_str, bytes) else bytes(byte_str)
-    results = run_pipeline(data, encoding_era, max_bytes=max_bytes)
-    result = results[0].to_dict()
-    if should_rename_legacy:
-        apply_legacy_rename(result)
-    return result
+    return _detect_rs(
+        data,
+        should_rename_legacy=should_rename_legacy,
+        encoding_era=encoding_era,
+        max_bytes=max_bytes,
+    )
 
 
-def detect_all(  # noqa: PLR0913
+def detect_all(
     byte_str: bytes | bytearray,
     ignore_threshold: bool = False,
     should_rename_legacy: bool = True,
     encoding_era: EncodingEra = EncodingEra.ALL,
-    chunk_size: int = _DEFAULT_CHUNK_SIZE,
+    chunk_size: int = 65536,
     max_bytes: int = DEFAULT_MAX_BYTES,
 ) -> list[DetectionDict]:
     """Detect all possible encodings of the given byte string.
@@ -94,14 +124,12 @@ def detect_all(  # noqa: PLR0913
     """
     _warn_deprecated_chunk_size(chunk_size)
     _validate_max_bytes(max_bytes)
+    
     data = byte_str if isinstance(byte_str, bytes) else bytes(byte_str)
-    results = run_pipeline(data, encoding_era, max_bytes=max_bytes)
-    dicts = [r.to_dict() for r in results]
-    if not ignore_threshold:
-        filtered = [d for d in dicts if d["confidence"] > MINIMUM_THRESHOLD]
-        if filtered:
-            dicts = filtered
-    if should_rename_legacy:
-        for d in dicts:
-            apply_legacy_rename(d)
-    return sorted(dicts, key=lambda d: d["confidence"], reverse=True)
+    return _detect_all_rs(
+        data,
+        ignore_threshold=ignore_threshold,
+        should_rename_legacy=should_rename_legacy,
+        encoding_era=encoding_era,
+        max_bytes=max_bytes,
+    )
