@@ -5,6 +5,11 @@ chardet uses a multi-stage detection pipeline. Each stage either returns a
 definitive result or passes to the next, progressing from cheap deterministic
 checks to more expensive statistical analysis.
 
+Implementation note: the production detection engine is implemented in Rust
+(``rust/src``) and bound to Python as ``chardet_rs._chardet_rs`` via PyO3.
+The Python package preserves the public API while delegating detection to the
+Rust core.
+
 Detection Pipeline
 ------------------
 

@@ -8,7 +8,8 @@ Universal character encoding detector.
 
 chardet 7.0 is a ground-up, MIT-licensed rewrite of [chardet](https://github.com/chardet/chardet).
 Same package name, same public API — drop-in replacement for chardet 5.x/6.x, just much faster and more accurate.
-Python 3.10+, zero runtime dependencies, works on PyPy.
+The detection engine is reimplemented in Rust and exposed to Python via PyO3.
+Python 3.10+.
 
 ## Why chardet 7.0?
 
@@ -17,16 +18,16 @@ and **6.8x faster** than
 charset-normalizer. **Language
 detection** for every result. **MIT licensed.**
 
-|                        | chardet 7.0 (mypyc) | chardet 7.0 (pure) | chardet 6.0.0 | [charset-normalizer] |
-| ---------------------- | :-----------------: | :----------------: | :-----------: | :------------------: |
-| Accuracy (2,510 files) |      **98.1%**      |     **98.1%**      |     88.2%     |        78.5%         |
-| Speed                  |   **546 files/s**   |  **383 files/s**   |  13 files/s   |      80 files/s      |
-| Language detection     |      **95.1%**      |     **95.1%**      |       --      |          --          |
-| Peak memory            |    **26.2 MiB**     |    **26.3 MiB**    |   29.5 MiB    |      101.2 MiB       |
-| Streaming detection    |       **yes**       |      **yes**       |      yes      |          no          |
-| Encoding era filtering |       **yes**       |      **yes**       |      no       |          no          |
-| Supported encodings    |         99          |         99         |      84       |          99          |
-| License                |         MIT         |        MIT         |     LGPL      |         MIT          |
+|                        | chardet 7.0 (Rust core) | chardet 6.0.0 | [charset-normalizer] |
+| ---------------------- | :----------------------: | :-----------: | :------------------: |
+| Accuracy (2,510 files) |         **98.1%**        |     88.2%     |        78.5%         |
+| Speed                  |       **546 files/s**    |  13 files/s   |      80 files/s      |
+| Language detection     |         **95.1%**        |       --      |          --          |
+| Peak memory            |        **26.2 MiB**      |   29.5 MiB    |      101.2 MiB       |
+| Streaming detection    |          **yes**         |      yes      |          no          |
+| Encoding era filtering |          **yes**         |      no       |          no          |
+| Supported encodings    |            99            |      84       |          99          |
+| License                |            MIT           |     LGPL      |         MIT          |
 
 [charset-normalizer]: https://github.com/jawah/charset_normalizer
 
@@ -35,6 +36,9 @@ detection** for every result. **MIT licensed.**
 ```bash
 pip install chardet
 ```
+
+For source builds (or editable local development), install a Rust toolchain as
+well, because the extension module is built from `rust/` with `maturin`.
 
 ## Quick Start
 
@@ -123,12 +127,12 @@ cat somefile.txt | chardetect
 
 - **MIT license** (previous versions were LGPL)
 - **Ground-up rewrite** — 12-stage detection pipeline using BOM detection, structural probing, byte validity filtering, and bigram statistical models
-- **43x faster** than chardet 6.0.0 with mypyc (**30x** pure Python), **6.8x faster** than charset-normalizer
+- **43x faster** than chardet 6.0.0, **6.8x faster** than charset-normalizer
 - **98.1% accuracy** — +9.9pp vs chardet 6.0.0, +19.6pp vs charset-normalizer
 - **Language detection** — 95.1% accuracy across 49 languages, returned with every result
 - **99 encodings** — full coverage including EBCDIC, Mac, DOS, and Baltic/Central European families
 - **`EncodingEra` filtering** — scope detection to modern web encodings, legacy ISO/Mac/DOS, mainframe, or all
-- **Optional mypyc compilation** — 1.42x additional speedup on CPython
+- **Rust core with Python bindings** — performance-critical pipeline is implemented in Rust (`rust/src`) and exposed via `chardet_rs._chardet_rs`
 - **Thread-safe** — `detect()` and `detect_all()` are safe to call concurrently; scales on free-threaded Python
 - **Same API** — `detect()`, `detect_all()`, `UniversalDetector`, and the `chardetect` CLI all work as before
 

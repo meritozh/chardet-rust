@@ -13,12 +13,11 @@ byte strings and returns the detected encoding, confidence score, and language.
    # {'encoding': 'utf-8', 'confidence': 0.99, 'language': 'es'}
 
 chardet 7.0 is a ground-up, MIT-licensed rewrite — same package name, same
-public API, drop-in replacement for chardet 5.x/6.x. Python 3.10+, zero
-runtime dependencies, works on PyPy.
+public API, drop-in replacement for chardet 5.x/6.x. The detector core is
+implemented in Rust and exposed to Python via PyO3. Python 3.10+.
 
 - **98.1% accuracy** on 2,510 test files
-- **43x faster** than chardet 6.0.0 with mypyc, **30x faster** pure Python
-- **6.8x faster** than charset-normalizer with mypyc, **7.0x faster** pure Python
+- **High-performance Rust core** with Python bindings
 - **Language detection** for every result (95.1% accuracy)
 - **99 encodings** across six encoding eras
 - **Thread-safe** ``detect()`` and ``detect_all()``

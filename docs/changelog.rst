@@ -12,8 +12,8 @@ public API — drop-in replacement for chardet 5.x/6.x.
 - **MIT license** (previous versions were LGPL)
 - **96.8% accuracy** on 2,179 test files (+2.3pp vs chardet 6.0.0,
   +7.7pp vs charset-normalizer)
-- **41x faster** than chardet 6.0.0 with mypyc (**28x** pure Python),
-  **7.5x faster** than charset-normalizer
+- **41x faster** than chardet 6.0.0 and **7.5x faster** than
+  charset-normalizer on the project benchmark suite
 - **Language detection** for every result (90.5% accuracy across 49
   languages)
 - **99 encodings** across six eras (MODERN_WEB, LEGACY_ISO, LEGACY_MAC,
@@ -24,7 +24,7 @@ public API — drop-in replacement for chardet 5.x/6.x.
   post-processing
 - **Bigram frequency models** trained on CulturaX multilingual corpus
   data for all supported language/encoding pairs
-- **Optional mypyc compilation** — 1.49x additional speedup on CPython
+- **Rust core with Python bindings** via PyO3 (``chardet_rs._chardet_rs``)
 - **Thread-safe** ``detect()`` and ``detect_all()`` with no measurable
   overhead; scales on free-threaded Python 3.13t+
 - **Negligible import memory** (96 B)

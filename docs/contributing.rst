@@ -10,8 +10,11 @@ chardet uses `uv <https://docs.astral.sh/uv/>`_ for dependency management:
 
    git clone https://github.com/chardet/chardet.git
    cd chardet
-   uv sync                    # install dependencies
+   uv sync                    # install Python dependencies
+   uv pip install -e rust     # build/install Rust extension in editable mode
    prek install               # set up pre-commit hooks (ruff lint+format, etc.)
+
+You need a Rust toolchain (stable) for local builds of the extension module.
 
 Running Tests
 -------------
@@ -84,53 +87,52 @@ on tag push.
 Architecture Overview
 ---------------------
 
-All detection flows through ``run_pipeline()`` in
-``src/chardet/pipeline/orchestrator.py``, which runs stages in order —
-each stage either returns a definitive result or passes to the next:
+The public Python API lives in ``src/chardet`` and forwards detection calls to
+the Rust extension module ``chardet_rs._chardet_rs``.
 
-1. **BOM** (``bom.py``) — byte order mark
-2. **UTF-16/32 patterns** (``utf1632.py``) — null-byte patterns
-3. **Escape sequences** (``escape.py``) — ISO-2022-JP/KR, HZ-GB-2312
-4. **Binary detection** (``binary.py``) — null bytes / control chars
-5. **Markup charset** (``markup.py``) — ``<meta charset>`` / ``<?xml encoding>``
-6. **ASCII** (``ascii.py``) — pure 7-bit check
-7. **UTF-8** (``utf8.py``) — structural multi-byte validation
-8. **Byte validity** (``validity.py``) — eliminate invalid encodings
+The detection pipeline itself is implemented in ``rust/src/pipeline``.
+Stages are executed in order — each stage either returns a definitive result
+or passes to the next:
+
+1. **BOM** (``bom.rs``) — byte order mark
+2. **UTF-16/32 patterns** (``utf1632.rs``) — null-byte patterns
+3. **Escape sequences** (``escape.rs``) — ISO-2022-JP/KR, HZ-GB-2312
+4. **Binary detection** (``binary.rs``) — null bytes / control chars
+5. **Markup charset** (``markup.rs``) — ``<meta charset>`` / ``<?xml encoding>``
+6. **ASCII** (``ascii.rs``) — pure 7-bit check
+7. **UTF-8** (``utf8.rs``) — structural multi-byte validation
+8. **Byte validity** (``validity.rs``) — eliminate invalid encodings
 9. **CJK gating** (in orchestrator) — eliminate spurious CJK candidates
-10. **Structural probing** (``structural.py``) — multi-byte encoding fit
-11. **Statistical scoring** (``statistical.py``) — bigram frequency models
+10. **Structural probing** (``structural.rs``) — multi-byte encoding fit
+11. **Statistical scoring** (``statistical.rs``) — bigram frequency models
 12. **Post-processing** (orchestrator) — confusion groups, niche demotion
 
-Key types:
+Key Rust types:
 
-- ``DetectionResult`` — frozen dataclass: ``encoding``, ``confidence``,
+- ``DetectionResult`` (``models.rs``) — ``encoding``, ``confidence``,
   ``language``
-- ``EncodingInfo`` (``registry.py``) — frozen dataclass: ``name``,
-  ``aliases``, ``era``, ``is_multibyte``, ``python_codec``
-- ``EncodingEra`` (``enums.py``) — IntFlag for filtering candidates
-- ``BigramProfile`` (``models/__init__.py``) — pre-computed bigram
-  frequencies
+- ``EncodingInfo`` (``registry.rs``) — name/aliases/era/codec metadata
+- ``EncodingEra`` (``enums.rs``) — bitflag for filtering candidates
+- model tables loaded from ``src/chardet/models/models.bin``
 
 Model format: binary file ``src/chardet/models/models.bin`` — sparse
 bigram tables loaded via ``struct.unpack``. Each model is a 65,536-byte
 lookup table indexed by ``(b1 << 8) | b2``.
 
-Optional mypyc Compilation
---------------------------
+Rust Extension Build
+--------------------
 
-Hot-path modules can be compiled to C extensions with
-`mypyc <https://mypyc.readthedocs.io>`_:
+The Python extension module is built from ``rust/`` using maturin:
 
 .. code-block:: bash
 
-   HATCH_BUILD_HOOK_ENABLE_MYPYC=true uv build
+   uv pip install -e rust
 
-Compiled modules: ``models/__init__.py``, ``pipeline/structural.py``,
-``pipeline/validity.py``, ``pipeline/statistical.py``,
-``pipeline/utf1632.py``, ``pipeline/utf8.py``, ``pipeline/escape.py``.
+For direct Rust-only checks:
 
-These modules cannot use ``from __future__ import annotations``
-(``FA100`` is ignored for them in ruff config).
+.. code-block:: bash
+
+   cargo test --manifest-path rust/Cargo.toml
 
 Versioning
 ----------
@@ -143,7 +145,7 @@ Conventions
 -----------
 
 - ``from __future__ import annotations`` in all source files (except
-  mypyc-compiled modules)
+  generated/version files when applicable)
 - Frozen dataclasses with ``slots=True`` for data types
 - Ruff with ``select = ["ALL"]`` and targeted ignores
 - Training data (CulturaX corpus + HTML) is never the same as

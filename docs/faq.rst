@@ -35,8 +35,8 @@ an alternative encoding detector. Key differences:
 
 - **Accuracy:** chardet achieves 98.1% vs charset-normalizer's 78.5% on
   the same test suite.
-- **Speed:** chardet is 6.8x faster with mypyc (546 vs 80 files/s),
-  7.0x faster pure Python (383 vs 55 files/s).
+- **Speed:** chardet's Rust core significantly outperforms
+  charset-normalizer on the project benchmark suite.
 - **Memory:** chardet uses 3.9x less peak memory (26.2 vs 101.2 MiB).
 - **Language detection:** chardet reports the detected language;
   charset-normalizer does not.
@@ -51,8 +51,8 @@ Mozilla's uchardet C/C++ library. Key differences:
 - **Speed:** cchardet is faster (1.2s vs 4.6s) due to C implementation.
 - **Encoding breadth:** chardet supports 49 more encodings than cchardet,
   including EBCDIC, Mac, Baltic, and BOM-less UTF-16/32.
-- **Dependencies:** chardet is pure Python with zero dependencies.
-  cchardet requires a C compiler to build from source.
+- **Implementation:** chardet uses a Rust core with Python bindings.
+  cchardet wraps Mozilla's uchardet C/C++ implementation.
 
 Is chardet thread-safe?
 -------------------------
@@ -70,6 +70,7 @@ you use.
 Does chardet work on PyPy?
 ---------------------------
 
-Yes. chardet is pure Python and works on PyPy without modification.
-The optional mypyc compilation is CPython-only; PyPy uses the pure-Python
-code path automatically.
+chardet 7.0 uses a native extension module built from Rust via PyO3.
+Support depends on availability of compatible wheels/toolchains for your
+runtime and platform. If no wheel is available, building from source requires
+both Python and Rust toolchains.
