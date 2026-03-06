@@ -135,6 +135,7 @@ pub fn detect_bytes(
     max_bytes: usize,
 ) -> DetectionResult {
     let results = run_pipeline(data, encoding_era, max_bytes);
+    // Results are already sorted by the pipeline; confusion resolution handles ties
     results[0].clone()
 }
 
@@ -145,7 +146,7 @@ pub fn detect_all_bytes(
     max_bytes: usize,
     ignore_threshold: bool,
 ) -> Vec<DetectionResult> {
-    let mut results = run_pipeline(data, encoding_era, max_bytes);
+    let results = run_pipeline(data, encoding_era, max_bytes);
     
     // Filter by threshold if requested
     if !ignore_threshold {
@@ -156,12 +157,10 @@ pub fn detect_all_bytes(
             .collect();
         
         if !filtered.is_empty() {
-            results = filtered;
+            return filtered;
         }
     }
     
-    // Sort by confidence descending
-    results.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
-    
+    // Results are already sorted by the pipeline; don't re-sort to preserve confusion resolution
     results
 }

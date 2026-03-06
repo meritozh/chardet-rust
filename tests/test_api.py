@@ -50,8 +50,8 @@ def test_detect_with_encoding_era():
 
 def test_encoding_era_excludes_legacy():
     """MODERN_WEB excludes legacy encodings; ALL includes them."""
-    # Greek text that should be detected as iso-8859-7 (Legacy ISO) when
-    # legacy eras are enabled, but not when restricted to MODERN_WEB.
+    # Greek text - windows-1253 (modern) is preferred over iso-8859-7 (legacy)
+    # when both are available, due to confusion resolution preferring Windows encodings.
     data = (
         "Η Αθήνα είναι η πρωτεύουσα και μεγαλύτερη πόλη της Ελλάδας. "
         "Η πόλη έχει μακρά ιστορία που εκτείνεται πάνω από τρεις χιλιετίες."
@@ -62,11 +62,11 @@ def test_encoding_era_excludes_legacy():
     legacy = chardet.detect(
         data, encoding_era=EncodingEra.ALL, should_rename_legacy=False
     )
-    # With ALL, iso-8859-7 should be detected
-    assert legacy["encoding"] == "iso-8859-7"
+    # With ALL, windows-1253 is detected (preferred over iso-8859-7)
+    assert legacy["encoding"] == "windows-1253"
     # With MODERN_WEB only, iso-8859-7 is not a candidate so the result
-    # must be a different encoding (windows-1253 is the modern Greek encoding)
-    assert modern["encoding"] != "iso-8859-7"
+    # must also be windows-1253 (the modern Greek encoding)
+    assert modern["encoding"] == "windows-1253"
 
 
 def test_detect_with_max_bytes():

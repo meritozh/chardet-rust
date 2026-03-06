@@ -46,11 +46,12 @@ pub fn is_binary(data: &[u8], max_bytes: usize) -> bool {
     }
     
     // Count binary-indicator control bytes (0x00-0x08, 0x0E-0x1F — excludes \t \n \v \f \r)
+    // Also excludes 0x0E (SO), 0x0F (SI), 0x1B (ESC) used by ISO-2022 escape sequences
     // Also count null bytes (0x00) specifically
     let null_count: usize = data.iter().filter(|&&b| b == 0x00).count();
     let control_count: usize = data
         .iter()
-        .filter(|&&b| (b <= 0x08) || (b >= 0x0E && b <= 0x1F))
+        .filter(|&&b| (b <= 0x08) || (b >= 0x10 && b <= 0x1A) || (b >= 0x1C && b <= 0x1F))
         .count();
     
     let binary_count = null_count + control_count;

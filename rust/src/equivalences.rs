@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use once_cell::sync::Lazy;
 
 /// Preferred superset mapping for the should_rename_legacy API option.
+/// Uses display-cased names to match chardet 6.x output (e.g., "Windows-1252").
 static PREFERRED_SUPERSET: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     let mut map = HashMap::new();
     map.insert("ascii", "Windows-1252");

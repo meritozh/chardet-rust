@@ -213,11 +213,25 @@ fn looks_like_text(codepoints: &[u32]) -> bool {
     
     let printable: usize = sample.iter()
         .filter(|&&cp| {
-            let c = std::char::from_u32(cp);
-            match c {
-                Some(ch) => ch.is_ascii_graphic() || ch.is_ascii_whitespace(),
-                None => false,
+            // Valid Unicode codepoint
+            if cp > 0x10FFFF {
+                return false;
             }
+            // Control characters (except common whitespace)
+            if cp < 0x20 && cp != 0x09 && cp != 0x0A && cp != 0x0D {
+                return false;
+            }
+            // High surrogates (invalid standalone)
+            if (0xD800..=0xDFFF).contains(&cp) {
+                return false;
+            }
+            // Private use areas (unlikely to be meaningful text)
+            if (0xE000..=0xF8FF).contains(&cp) ||
+               (0xF0000..=0xFFFFD).contains(&cp) ||
+               (0x100000..=0x10FFFD).contains(&cp) {
+                return false;
+            }
+            true
         })
         .count();
     

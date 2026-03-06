@@ -20,19 +20,20 @@ pub fn run_pipeline(
         return vec![DetectionResult::new(Some("utf-8"), 0.10, None)];
     }
     
-    // Stage 0: Binary detection - run first to avoid misclassifying binary files
-    if binary::is_binary(data, max_bytes) {
-        return vec![DetectionResult::new(None, DETERMINISTIC_CONFIDENCE, None)];
-    }
-    
-    // Stage 1a: BOM detection
+    // Stage 0a: BOM detection (before binary check, as BOM indicates text encoding)
     if let Some(result) = bom::detect_bom(data) {
         return vec![result];
     }
     
-    // Stage 1a+: UTF-16/32 null-byte pattern detection
+    // Stage 0b: UTF-16/32 null-byte pattern detection (before binary check)
+    // UTF-32/16 have many null bytes but are valid text encodings
     if let Some(result) = utf1632::detect_utf1632_patterns(data) {
         return vec![result];
+    }
+    
+    // Stage 0c: Binary detection - run after UTF-16/32 check to avoid misclassifying them
+    if binary::is_binary(data, max_bytes) {
+        return vec![DetectionResult::new(None, DETERMINISTIC_CONFIDENCE, None)];
     }
     
     // Escape-sequence encodings (ISO-2022, HZ-GB-2312, UTF-7)
@@ -42,14 +43,21 @@ pub fn run_pipeline(
         if let Some(enc_info) = get_candidates(encoding_era)
             .into_iter()
             .find(|e| e.name == enc_name.as_str()) {
-            if encoding_era.contains(enc_info.era) {
+            if encoding_era.contains(&enc_info.era) {
                 return vec![result];
             }
         }
     }
     
-    // Pre-check UTF-8
-    let utf8_precheck = utf8::detect_utf8(data);
+    // Pre-check UTF-8 and track if it failed validation
+    let (utf8_precheck, utf8_failed_validation) = match utf8::detect_utf8(data) {
+        Some(result) => (Some(result), false),
+        None => {
+            // Check if it failed due to invalid bytes (not just pure ASCII)
+            let has_high_bytes = data.iter().any(|&b| b >= 0x80);
+            (None, has_high_bytes)  // Failed validation if high bytes exist
+        }
+    };
     
     // Stage 1b: Markup charset extraction
     if let Some(result) = markup::detect_markup_charset(data) {
@@ -68,7 +76,17 @@ pub fn run_pipeline(
     
     // Stage 2a: Byte validity filtering
     let candidates = get_candidates(encoding_era);
-    let valid_candidates = validity::filter_by_validity(data, &candidates);
+    let has_johab = candidates.iter().any(|c| c.name == "johab");
+    eprintln!("DEBUG: Candidates includes johab: {}", has_johab);
+    let mut valid_candidates = validity::filter_by_validity(data, &candidates);
+    let has_johab_after = valid_candidates.iter().any(|c| c.name == "johab");
+    eprintln!("DEBUG: After validity filter includes johab: {}", has_johab_after);
+    
+    // If UTF-8 failed structural validation, exclude it from candidates
+    // to prevent the statistical model from scoring it
+    if utf8_failed_validation {
+        valid_candidates.retain(|c| c.name != "utf-8" && c.name != "utf-8-sig");
+    }
     
     if valid_candidates.is_empty() {
         return vec![DetectionResult::new(Some("windows-1252"), 0.10, None)];
@@ -124,12 +142,25 @@ fn gate_cjk_candidates<'a>(
 ) -> Vec<&'a EncodingInfo> {
     let mut gated: Vec<&EncodingInfo> = Vec::new();
     
+    // Debug: Check for Johab
+    let has_johab = candidates.iter().any(|c| c.name == "johab");
+    if has_johab {
+        eprintln!("DEBUG gate_cjk: Johab is in candidates");
+    }
+    
     for enc in candidates {
         if enc.is_multibyte {
             let mb_score = structural::compute_structural_score(data, enc, ctx);
             ctx.mb_scores.insert(enc.name.to_string(), mb_score);
             
+            if enc.name == "johab" {
+                eprintln!("DEBUG gate_cjk: Johab mb_score={}", mb_score);
+            }
+            
             if mb_score < CJK_MIN_MB_RATIO {
+                if enc.name == "johab" {
+                    eprintln!("DEBUG gate_cjk: Johab eliminated - mb_score < {}", CJK_MIN_MB_RATIO);
+                }
                 continue; // No multi-byte structure -> eliminate
             }
             
@@ -148,7 +179,14 @@ fn gate_cjk_candidates<'a>(
             );
             ctx.mb_coverage.insert(enc.name.to_string(), byte_coverage);
             
+            if enc.name == "johab" {
+                eprintln!("DEBUG gate_cjk: Johab non_ascii_count={}, byte_coverage={}", non_ascii_count, byte_coverage);
+            }
+            
             if byte_coverage < CJK_MIN_BYTE_COVERAGE {
+                if enc.name == "johab" {
+                    eprintln!("DEBUG gate_cjk: Johab eliminated - byte_coverage < {}", CJK_MIN_BYTE_COVERAGE);
+                }
                 continue; // Most high bytes are orphans
             }
             
@@ -224,18 +262,20 @@ fn postprocess_results(
 }
 
 fn demote_niche_latin(
-    data: &[u8],
+    _data: &[u8],
     results: Vec<DetectionResult>,
 ) -> Vec<DetectionResult> {
     // Simplified version - check for niche Latin encodings with no distinguishing bytes
+    // Note: We no longer demote windows-1254 as it's the standard encoding for Turkish,
+    // not a "niche" encoding. Demoting it causes Turkish text to be misdetected.
     if results.len() < 2 {
         return results;
     }
     
     let top_encoding = results[0].encoding.as_ref().cloned();
     
-    // Niche encodings to demote if no distinguishing bytes present
-    let niche_encodings: &[&str] = &["iso-8859-10", "iso-8859-14", "windows-1254"];
+    // Truly niche encodings to demote (mostly obsolete ISO-8859 variants)
+    let niche_encodings: &[&str] = &["iso-8859-10", "iso-8859-14"];
     
     if let Some(ref enc) = top_encoding {
         if niche_encodings.contains(&enc.as_str()) {

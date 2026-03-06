@@ -11,7 +11,8 @@ from chardet._utils import DEFAULT_MAX_BYTES
 from chardet.enums import EncodingEra
 from chardet.pipeline import DetectionDict
 
-_ERA_NAMES = [e.name.lower() for e in EncodingEra if e.bit_count() == 1] + ["all"]
+# Hardcoded list since Rust enum doesn't support Python enum iteration
+_ERA_NAMES = ["modern_web", "legacy_iso", "legacy_mac", "legacy_regional", "dos", "mainframe", "all"]
 
 
 def _print_result(result: DetectionDict, label: str, *, minimal: bool) -> None:
@@ -45,9 +46,16 @@ def main(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(argv)
 
-    era = (
-        EncodingEra[args.encoding_era.upper()] if args.encoding_era else EncodingEra.ALL
-    )
+    era_map = {
+        "MODERN_WEB": EncodingEra.MODERN_WEB,
+        "LEGACY_ISO": EncodingEra.LEGACY_ISO,
+        "LEGACY_MAC": EncodingEra.LEGACY_MAC,
+        "LEGACY_REGIONAL": EncodingEra.LEGACY_REGIONAL,
+        "DOS": EncodingEra.DOS,
+        "MAINFRAME": EncodingEra.MAINFRAME,
+        "ALL": EncodingEra.ALL,
+    }
+    era = era_map.get(args.encoding_era.upper(), EncodingEra.ALL) if args.encoding_era else EncodingEra.ALL
 
     if args.files:
         errors = 0

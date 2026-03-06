@@ -25,17 +25,19 @@ def _init_models():
                 _load_models(data)
                 return True
     except Exception as e:
-        # Silently continue - models are optional
-        pass
+        # Models are optional - log error for debugging but don't fail
+        import warnings
+        warnings.warn(f"Failed to load bigram models: {e}", RuntimeWarning, stacklevel=2)
     
     return False
-
-# Initialize models (optional - fall back to simplified scoring if not available)
-_init_models()
 
 DEFAULT_MAX_BYTES: int = 200_000
 MINIMUM_THRESHOLD: float = 0.20
 _DEFAULT_CHUNK_SIZE: int = 65_536
+
+# Initialize models (optional - fall back to simplified scoring if not available)
+# This must be done after all module-level constants are defined
+_init_models()
 
 
 class DetectionDict(dict):

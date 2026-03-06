@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 import chardet
-from chardet.detector import UniversalDetector
+from chardet import UniversalDetector
 from chardet.enums import EncodingEra
 
 

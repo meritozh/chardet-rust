@@ -14,7 +14,7 @@ import pytest
 from utils import collect_test_files, get_data_dir, normalize_language
 
 import chardet
-from chardet.detector import UniversalDetector
+from chardet import UniversalDetector
 from chardet.enums import EncodingEra
 from chardet.equivalences import (
     is_correct,

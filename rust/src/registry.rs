@@ -41,7 +41,7 @@ pub static REGISTRY: Lazy<HashMap<&'static str, EncodingInfo>> = Lazy::new(|| {
 pub fn get_candidates(era: EncodingEra) -> Vec<&'static EncodingInfo> {
     ENCODING_ENTRIES
         .iter()
-        .filter(|enc| era.contains(enc.era))
+        .filter(|enc| era.contains(&enc.era))
         .collect()
 }
 
