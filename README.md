@@ -11,6 +11,10 @@ Same package name, same public API — drop-in replacement for chardet 5.x/6.x, 
 The detection engine is reimplemented in Rust and exposed to Python via PyO3.
 Python 3.10+.
 
+> [!WARNING]
+> This Rust reimplementation is an AI experiment.
+> It is not an official upstream replacement.
+
 ## Why chardet 7.0?
 
 **98.1% accuracy** on 2,510 test files. **43x faster** than chardet 6.0.0
@@ -125,16 +129,15 @@ cat somefile.txt | chardetect
 
 ## What's New in 7.0
 
-- **MIT license** (previous versions were LGPL)
-- **Ground-up rewrite** — 12-stage detection pipeline using BOM detection, structural probing, byte validity filtering, and bigram statistical models
+- **Rust reimplementation of the detector core** — the full detection pipeline is implemented in `rust/src` and exposed to Python via `chardet_rs._chardet_rs` (PyO3)
+- **Python API compatibility layer** — `detect()`, `detect_all()`, `UniversalDetector`, and `chardetect` keep the familiar chardet API while delegating execution to Rust
+- **12-stage detection pipeline** — BOM detection, structural probing, byte validity filtering, and bigram statistical models are now executed in native code
 - **43x faster** than chardet 6.0.0, **6.8x faster** than charset-normalizer
 - **98.1% accuracy** — +9.9pp vs chardet 6.0.0, +19.6pp vs charset-normalizer
 - **Language detection** — 95.1% accuracy across 49 languages, returned with every result
 - **99 encodings** — full coverage including EBCDIC, Mac, DOS, and Baltic/Central European families
 - **`EncodingEra` filtering** — scope detection to modern web encodings, legacy ISO/Mac/DOS, mainframe, or all
-- **Rust core with Python bindings** — performance-critical pipeline is implemented in Rust (`rust/src`) and exposed via `chardet_rs._chardet_rs`
-- **Thread-safe** — `detect()` and `detect_all()` are safe to call concurrently; scales on free-threaded Python
-- **Same API** — `detect()`, `detect_all()`, `UniversalDetector`, and the `chardetect` CLI all work as before
+- **Thread-safe detection calls** — `detect()` and `detect_all()` are safe to call concurrently; free-threaded execution is covered in CI for Python 3.13t
 
 ## Documentation
 

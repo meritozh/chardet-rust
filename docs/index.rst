@@ -16,6 +16,11 @@ chardet 7.0 is a ground-up, MIT-licensed rewrite — same package name, same
 public API, drop-in replacement for chardet 5.x/6.x. The detector core is
 implemented in Rust and exposed to Python via PyO3. Python 3.10+.
 
+.. warning::
+
+   This Rust reimplementation is an AI experiment and is not an official
+   upstream replacement.
+
 - **98.1% accuracy** on 2,510 test files
 - **High-performance Rust core** with Python bindings
 - **Language detection** for every result (95.1% accuracy)
