@@ -39,7 +39,7 @@ Changelog = "https://chardet.readthedocs.io/en/latest/changelog.html"
 chardetect = "chardet.cli:main"
 
 [build-system]
-requires = ["setuptools>=61", "setuptools-scm>=8"]
+requires = ["setuptools>=61", "setuptools-rust>=1.6.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -48,7 +48,17 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# Version set statically to 0.1
+[tool.setuptools-rust]
+# Build the Rust extension from the rust/ directory
+# The extension will be available as chardet_rs._chardet_rs
+
+[[tool.setuptools-rust.ext-modules]]
+# The full Python module path where the extension will be available
+name = "chardet_rs._chardet_rs"
+# Path to Cargo.toml
+path = "rust/Cargo.toml"
+# PyO3 binding (default)
+binding = "PyO3"
 
 
 [tool.pytest]
