@@ -1,6 +1,6 @@
 # Makefile for chardet package builds
 
-.PHONY: all clean build sdist wheel check upload test
+.PHONY: all clean build sdist wheel check upload upload-all upload-test test
 
 # Default target
 all: clean build
@@ -29,6 +29,18 @@ check:
 
 # Upload to PyPI (requires authentication)
 upload: check
+	@set -e; \
+	files=$$(ls dist/* | grep -Ev -- '-linux_[^/]*\.whl$$' || true); \
+	if [ -z "$$files" ]; then \
+		echo "No uploadable distributions found in dist/"; \
+		exit 1; \
+	fi; \
+	echo "Uploading filtered distributions:"; \
+	printf '%s\n' $$files; \
+	uvx twine upload $$files
+
+# Upload all distributions as-is (may fail on unsupported local platform wheels)
+upload-all: check
 	uvx twine upload dist/*
 
 # Upload to TestPyPI (requires authentication)
@@ -65,7 +77,8 @@ help:
 	@echo "  sdist       - Build source distribution only"
 	@echo "  wheel       - Build wheel only"
 	@echo "  check       - Check distributions with twine"
-	@echo "  upload      - Upload to PyPI"
+	@echo "  upload      - Upload to PyPI (skips unsupported local linux_* wheels)"
+	@echo "  upload-all  - Upload all files in dist/ as-is"
 	@echo "  upload-test - Upload to TestPyPI"
 	@echo "  test        - Run test suite"
 	@echo "  dev         - Install in development mode"
