@@ -1,6 +1,6 @@
 [project]
 name = "chardet-rust"
-version = "0.1.4"
+version = "0.1.5"
 description = "Universal character encoding detector"
 license = "LGPL-2.1-or-later"
 readme = "README.md"
@@ -55,7 +55,7 @@ where = ["src"]
 [[tool.setuptools-rust.ext-modules]]
 # The Rust target name (from Cargo.toml [lib] name = "_chardet_rs")
 # This will create the extension at chardet_rs._chardet_rs
-target = "_chardet_rs"
+target = "chardet_rs._chardet_rs"
 # Path to Cargo.toml
 path = "rust/Cargo.toml"
 # PyO3 binding (default)
