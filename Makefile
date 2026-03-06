@@ -37,7 +37,8 @@ upload-test: check
 
 # Run tests
 test:
-	uv run pytest
+	uv pip install -e rust
+	PYTHONPATH=rust:src:scripts uv run pytest
 
 # Install package in development mode
 dev:
