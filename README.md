@@ -166,4 +166,4 @@ This section is informational only and is not legal advice.
 
 ## License
 
-[MIT](LICENSE)
+[LGPL](LICENSE)
