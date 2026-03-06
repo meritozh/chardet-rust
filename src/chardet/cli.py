@@ -12,7 +12,15 @@ from chardet.enums import EncodingEra
 from chardet.pipeline import DetectionDict
 
 # Hardcoded list since Rust enum doesn't support Python enum iteration
-_ERA_NAMES = ["modern_web", "legacy_iso", "legacy_mac", "legacy_regional", "dos", "mainframe", "all"]
+_ERA_NAMES = [
+    "modern_web",
+    "legacy_iso",
+    "legacy_mac",
+    "legacy_regional",
+    "dos",
+    "mainframe",
+    "all",
+]
 
 
 def _print_result(result: DetectionDict, label: str, *, minimal: bool) -> None:
@@ -55,7 +63,11 @@ def main(argv: list[str] | None = None) -> None:
         "MAINFRAME": EncodingEra.MAINFRAME,
         "ALL": EncodingEra.ALL,
     }
-    era = era_map.get(args.encoding_era.upper(), EncodingEra.ALL) if args.encoding_era else EncodingEra.ALL
+    era = (
+        era_map.get(args.encoding_era.upper(), EncodingEra.ALL)
+        if args.encoding_era
+        else EncodingEra.ALL
+    )
 
     if args.files:
         errors = 0

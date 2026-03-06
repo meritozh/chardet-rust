@@ -6,15 +6,19 @@ These provide Python IntFlag compatibility while wrapping the Rust implementatio
 from __future__ import annotations
 
 import enum
-from typing import Any, Dict
 
 # Import the underlying Rust enum for use in detection
-from chardet_rs._chardet_rs import EncodingEra as _EncodingEra, LanguageFilter as _LanguageFilter
+from chardet_rs._chardet_rs import (
+    EncodingEra as _EncodingEra,
+)
+from chardet_rs._chardet_rs import (
+    LanguageFilter as _LanguageFilter,
+)
 
 
 class EncodingEra(enum.IntFlag):
     """Bit flags representing encoding eras for filtering detection candidates."""
-    
+
     MODERN_WEB = 1
     LEGACY_ISO = 2
     LEGACY_MAC = 4
@@ -26,7 +30,7 @@ class EncodingEra(enum.IntFlag):
 
 class LanguageFilter(enum.IntFlag):
     """Language filter flags for UniversalDetector (chardet 6.x API compat)."""
-    
+
     CHINESE_SIMPLIFIED = 0x01
     CHINESE_TRADITIONAL = 0x02
     JAPANESE = 0x04
@@ -38,7 +42,7 @@ class LanguageFilter(enum.IntFlag):
 
 
 # Mapping from Python enum to Rust enum for internal use
-_ENCODING_ERA_MAP: Dict[EncodingEra, _EncodingEra] = {
+_ENCODING_ERA_MAP: dict[EncodingEra, _EncodingEra] = {
     EncodingEra.MODERN_WEB: _EncodingEra.MODERN_WEB,
     EncodingEra.LEGACY_ISO: _EncodingEra.LEGACY_ISO,
     EncodingEra.LEGACY_MAC: _EncodingEra.LEGACY_MAC,
@@ -48,7 +52,7 @@ _ENCODING_ERA_MAP: Dict[EncodingEra, _EncodingEra] = {
     EncodingEra.ALL: _EncodingEra.ALL,
 }
 
-_LANGUAGE_FILTER_MAP: Dict[LanguageFilter, _LanguageFilter] = {
+_LANGUAGE_FILTER_MAP: dict[LanguageFilter, _LanguageFilter] = {
     LanguageFilter.CHINESE_SIMPLIFIED: _LanguageFilter.CHINESE_SIMPLIFIED,
     LanguageFilter.CHINESE_TRADITIONAL: _LanguageFilter.CHINESE_TRADITIONAL,
     LanguageFilter.JAPANESE: _LanguageFilter.JAPANESE,
@@ -70,4 +74,9 @@ def _to_rust_language_filter(filter: LanguageFilter) -> _LanguageFilter:
     return _LANGUAGE_FILTER_MAP.get(filter, _LanguageFilter.ALL)
 
 
-__all__ = ["EncodingEra", "LanguageFilter", "_to_rust_encoding_era", "_to_rust_language_filter"]
+__all__ = [
+    "EncodingEra",
+    "LanguageFilter",
+    "_to_rust_encoding_era",
+    "_to_rust_language_filter",
+]
