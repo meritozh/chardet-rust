@@ -1,61 +1,151 @@
 //! Confusion group resolution for similar single-byte encodings.
+//!
+//! This module resolves ties between similar encodings that are difficult to
+//! distinguish statistically. It uses language-specific distinguishing bytes
+//! and encoding family preferences to break ties correctly.
+//!
+//! # Confusion Groups
+//!
+//! Many single-byte encodings overlap significantly in their byte mappings.
+//! For example, ISO-8859-1 and Windows-1252 are nearly identical except for
+//! the 0x80-0x9F range. This module uses distinguishing bytes to resolve
+//! these ambiguities.
+//!
+//! # Resolution Strategy
+//!
+//! 1. Check for language-specific distinguishing bytes
+//! 2. Apply encoding family preferences (Windows > ISO)
+//! 3. Return reordered results
 
 use super::DetectionResult;
 
-/// Check if the data contains bytes that distinguish Windows-1257 from Windows-1252
+/// Check if data contains bytes that distinguish Windows-1257 from Windows-1252
 /// for Baltic languages (Lithuanian, Latvian, Estonian).
+///
+/// These bytes decode to different characters in Windows-1252 vs Windows-1257
+/// and are commonly used in Baltic languages:
+/// - 0xE0 = ą (1257) vs à (1252)
+/// - 0xE8 = ė (1257) vs è (1252)
+/// - 0xF0 = š (1257) vs ð (1252)
+/// - 0xF8 = ų (1257) vs ø (1252)
+/// - 0xFB = ū (1257) vs û (1252)
+/// - 0xFE = ž (1257) vs þ (1252)
+/// - 0xEB = ė (1257) vs ë (1252)
+const BALTIC_DISTINGUISHING_BYTES: &[u8] = &[0xE0, 0xE8, 0xF0, 0xF8, 0xFB, 0xFE, 0xEB];
+
+/// Check for Baltic distinguishing bytes.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to check
+///
+/// # Returns
+///
+/// `true` if any Baltic distinguishing byte is present.
 fn has_baltic_distinguishing_bytes(data: &[u8]) -> bool {
-    // Bytes that decode to different characters in Windows-1252 vs Windows-1257
-    // and are commonly used in Baltic languages:
-    // 0xE0 = ą (1257) vs à (1252)
-    // 0xE8 = ė (1257) vs è (1252)
-    // 0xF0 = š (1257) vs ð (1252)
-    // 0xF8 = ų (1257) vs ø (1252)
-    // 0xFB = ū (1257) vs û (1252)
-    // 0xFE = ž (1257) vs þ (1252)
-    // 0xEB = ė (1257) vs ë (1252)
-    let baltic_bytes: &[u8] = &[0xE0, 0xE8, 0xF0, 0xF8, 0xFB, 0xFE, 0xEB];
-    data.iter().any(|&b| baltic_bytes.contains(&b))
+    data.iter().any(|&b| BALTIC_DISTINGUISHING_BYTES.contains(&b))
 }
 
-/// Check if the data contains bytes that distinguish KOI8-U from KOI8-R
-/// (Ukrainian-specific characters).
+/// Check if data contains bytes that distinguish KOI8-U from KOI8-R.
+///
+/// KOI8-U specific bytes for Ukrainian:
+/// - 0xA4 = є (Ukrainian ye)
+/// - 0xA6 = i (Ukrainian i)
+/// - 0xA7 = ї (Ukrainian yi)
+const KOI8U_DISTINGUISHING_BYTES: &[u8] = &[0xA4, 0xA6, 0xA7];
+
+/// Check for KOI8-U distinguishing bytes.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to check
+///
+/// # Returns
+///
+/// `true` if any KOI8-U distinguishing byte is present.
 fn has_koi8u_distinguishing_bytes(data: &[u8]) -> bool {
-    // KOI8-U specific bytes for Ukrainian:
-    // 0xA4 = є (Ukrainian ye)
-    // 0xA6 = i (Ukrainian i)
-    // 0xA7 = ї (Ukrainian yi)
-    let koi8u_bytes: &[u8] = &[0xA4, 0xA6, 0xA7];
-    data.iter().any(|&b| koi8u_bytes.contains(&b))
+    data.iter().any(|&b| KOI8U_DISTINGUISHING_BYTES.contains(&b))
 }
 
-/// Check if the data contains bytes that distinguish ISO-8859-16 from ISO-8859-1
-/// (South-Eastern European characters for Romanian, Croatian, etc.).
+/// Check if data contains bytes that distinguish ISO-8859-16 from ISO-8859-1.
+///
+/// ISO-8859-16 specific bytes for South-Eastern European languages
+/// (Romanian, Croatian, etc.):
+/// - 0xA1 = Ą, 0xA2 = ą, 0xA3 = Ł, 0xA6 = Ș, 0xA9 = Œ
+/// - 0xAA = ő, 0xAB = Ő, 0xAC = Ĳ, 0xB1 = ą, 0xB2 = Ł
+/// - 0xB3 = ł, 0xB6 = ș, 0xB9 = œ, 0xBA = ő, 0xBB = ő, 0xBC = ĳ
+const ISO8859_16_DISTINGUISHING_BYTES: &[u8] = &[
+    0xA1, 0xA2, 0xA3, 0xA6, 0xA9, 0xAA, 0xAB, 0xAC, 0xB1, 0xB2, 0xB3, 0xB6, 0xB9, 0xBA, 0xBB,
+    0xBC,
+];
+
+/// Check for ISO-8859-16 distinguishing bytes.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to check
+///
+/// # Returns
+///
+/// `true` if any ISO-8859-16 distinguishing byte is present.
 fn has_iso8859_16_distinguishing_bytes(data: &[u8]) -> bool {
-    // ISO-8859-16 specific bytes:
-    // 0xA1 = Ą, 0xA2 = ą, 0xA3 = Ł, 0xA6 = Ș, 0xA9 = Œ
-    // 0xAA = ő, 0xAB = Ő, 0xAC = Ĳ, 0xB1 = ą, 0xB2 = Ł
-    // 0xB3 = ł, 0xB6 = ș, 0xB9 = œ, 0xBA = ő, 0xBB = ő, 0xBC = ĳ
-    let iso8859_16_bytes: &[u8] = &[
-        0xA1, 0xA2, 0xA3, 0xA6, 0xA9, 0xAA, 0xAB, 0xAC, 0xB1, 0xB2, 0xB3, 0xB6, 0xB9, 0xBA, 0xBB,
-        0xBC,
-    ];
-    data.iter().any(|&b| iso8859_16_bytes.contains(&b))
+    data.iter().any(|&b| ISO8859_16_DISTINGUISHING_BYTES.contains(&b))
 }
 
-/// Get the language from the top result
+/// Get the language from the top detection result.
+///
+/// # Arguments
+///
+/// * `results` - The detection results
+///
+/// # Returns
+///
+/// The ISO 639-1 language code of the top result, or `None`.
 fn get_top_language(results: &[DetectionResult]) -> Option<&str> {
     results.first().and_then(|r| r.language.as_deref())
 }
 
 /// Resolve confusion between similar encodings in the top results.
+///
+/// This function examines the top detection results and reorders them
+/// if there's a known confusion that can be resolved using distinguishing
+/// bytes or encoding preferences.
+///
+/// # Arguments
+///
+/// * `data` - The original byte sequence
+/// * `results` - The detection results from statistical scoring
+///
+/// # Returns
+///
+/// Potentially reordered results with confusions resolved.
+///
+/// # Resolution Rules
+///
+/// 1. **Baltic**: If top language is Baltic and distinguishing bytes present,
+///    prefer Windows-1257 or ISO-8859-13
+/// 2. **KOI8-U vs KOI8-R**: If Ukrainian bytes present, prefer KOI8-U
+/// 3. **ISO-8859-16**: If distinguishing bytes present, prefer ISO-8859-16
+/// 4. **Windows vs ISO**: Generally prefer Windows codepages over ISO equivalents
+///
+/// # Examples
+///
+/// ```
+/// use chardet_rs::pipeline::confusion::resolve_confusion_groups;
+/// use chardet_rs::pipeline::DetectionResult;
+///
+/// // Results with potential ISO-8859-1 vs Windows-1252 confusion
+/// let results = vec![
+///     DetectionResult::new(Some("iso-8859-1"), 0.9, Some("en")),
+///     DetectionResult::new(Some("windows-1252"), 0.85, Some("en")),
+/// ];
+/// let resolved = resolve_confusion_groups(b"test", results);
+/// // Windows-1252 should be preferred
+/// ```
 pub fn resolve_confusion_groups(
     data: &[u8],
     results: Vec<DetectionResult>,
 ) -> Vec<DetectionResult> {
-    // Simplified version - in the full implementation this would use
-    // pre-computed distinguishing byte maps from confusion.bin
-
     if results.len() < 2 {
         return results;
     }

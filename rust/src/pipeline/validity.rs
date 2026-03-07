@@ -1,8 +1,53 @@
 //! Stage 2a: Byte sequence validity filtering.
+//!
+//! This module filters candidate encodings by validating that the input data
+//! contains byte sequences that are structurally valid for each encoding.
+//! Encodings that would produce errors when decoding are eliminated early,
+//! reducing the candidate pool for expensive statistical analysis.
+//!
+//! # Validation Strategy
+//!
+//! - **UTF-8**: Already validated earlier, pass through
+//! - **ASCII**: Check all bytes < 0x80
+//! - **CJK Multi-byte**: Validate specific byte sequence rules
+//! - **Single-byte**: Assume valid (statistical analysis will differentiate)
 
 use crate::registry::EncodingInfo;
 
 /// Filter candidates to only those where data decodes without errors.
+///
+/// This function eliminates encodings that are structurally incompatible
+/// with the input data. For example, if the data contains invalid Shift_JIS
+/// sequences, Shift_JIS is removed from the candidate list.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to validate
+/// * `candidates` - The list of candidate encodings to filter
+///
+/// # Returns
+///
+/// A vector of encodings that are structurally valid for the data.
+///
+/// # Algorithm
+///
+/// 1. Empty data: return all candidates
+/// 2. For each candidate, apply encoding-specific validation
+/// 3. Collect candidates that pass validation
+///
+/// # Examples
+///
+/// ```
+/// use chardet_rs::pipeline::validity::filter_by_validity;
+/// use chardet_rs::registry::{REGISTRY, get_candidates};
+/// use chardet_rs::enums::EncodingEra;
+///
+/// // Valid ASCII data
+/// let data = b"Hello, World!";
+/// let candidates = get_candidates(EncodingEra::All);
+/// let valid = filter_by_validity(data, &candidates);
+/// assert!(!valid.is_empty());
+/// ```
 pub fn filter_by_validity<'a>(
     data: &[u8],
     candidates: &[&'a EncodingInfo],
@@ -19,6 +64,15 @@ pub fn filter_by_validity<'a>(
 }
 
 /// Check if data is valid for a given encoding.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to validate
+/// * `enc` - The encoding to validate against
+///
+/// # Returns
+///
+/// `true` if the data is structurally valid for the encoding.
 fn is_valid_for_encoding(data: &[u8], enc: &EncodingInfo) -> bool {
     // For most encodings, we rely on structural validation.
     // For UTF-8, we've already validated it earlier in the pipeline.
@@ -41,6 +95,16 @@ fn is_valid_for_encoding(data: &[u8], enc: &EncodingInfo) -> bool {
     }
 }
 
+/// Validate data against multi-byte encoding rules.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to validate
+/// * `encoding` - The encoding name
+///
+/// # Returns
+///
+/// `true` if the data follows the encoding's structural rules.
 fn is_valid_multibyte(data: &[u8], encoding: &str) -> bool {
     match encoding {
         "shift_jis_2004" | "cp932" => is_valid_shift_jis(data),
@@ -54,12 +118,26 @@ fn is_valid_multibyte(data: &[u8], encoding: &str) -> bool {
     }
 }
 
+/// Validate Shift_JIS byte sequences.
+///
+/// # Shift_JIS Structure
+///
+/// - ASCII: 0x00-0x7F
+/// - Single-byte katakana: 0xA1-0xDF
+/// - Lead bytes: 0x81-0x9F, 0xE0-0xFC
+/// - Trail bytes: 0x40-0x7E, 0x80-0xFC
+///
+/// # Validation Rules
+///
+/// 1. Track valid vs invalid sequences
+/// 2. Require at least 2 valid sequences
+/// 3. Allow up to 30% invalid sequences (for truncated data)
 fn is_valid_shift_jis(data: &[u8]) -> bool {
-    let mut i = 0;
     let mut valid_pairs = 0;
     let mut valid_single = 0;
     let mut invalid_sequences = 0;
 
+    let mut i = 0;
     while i < data.len() {
         let b = data[i];
         if b < 0x80 {
@@ -118,6 +196,14 @@ fn is_valid_shift_jis(data: &[u8]) -> bool {
     true
 }
 
+/// Validate EUC-JP byte sequences.
+///
+/// # EUC-JP Structure
+///
+/// - ASCII: 0x00-0x7F
+/// - SS2 (half-width katakana): 0x8E + 0xA1-0xDF
+/// - SS3 (JIS X 0212): 0x8F + 0xA1-0xFE + 0xA1-0xFE
+/// - Two-byte JIS X 0208: 0xA1-0xFE + 0xA1-0xFE
 fn is_valid_euc_jp(data: &[u8]) -> bool {
     let mut i = 0;
     while i < data.len() {
@@ -160,6 +246,12 @@ fn is_valid_euc_jp(data: &[u8]) -> bool {
     true
 }
 
+/// Validate EUC-KR byte sequences.
+///
+/// # EUC-KR Structure
+///
+/// - ASCII: 0x00-0x7F
+/// - Two-byte KS X 1001: 0xA1-0xFE + 0xA1-0xFE
 fn is_valid_euc_kr(data: &[u8]) -> bool {
     let mut i = 0;
     while i < data.len() {
@@ -183,6 +275,13 @@ fn is_valid_euc_kr(data: &[u8]) -> bool {
     true
 }
 
+/// Validate GB18030 byte sequences.
+///
+/// # GB18030 Structure
+///
+/// - ASCII: 0x00-0x7F
+/// - Two-byte GBK: 0x81-0xFE + 0x40-0xFE
+/// - Four-byte: 0x81-0xFE + 0x30-0x39 + 0x81-0xFE + 0x30-0x39
 fn is_valid_gb18030(data: &[u8]) -> bool {
     let mut i = 0;
     while i < data.len() {
@@ -218,6 +317,13 @@ fn is_valid_gb18030(data: &[u8]) -> bool {
     true
 }
 
+/// Validate Big5 byte sequences.
+///
+/// # Big5 Structure
+///
+/// - ASCII: 0x00-0x7F
+/// - Lead bytes: 0xA1-0xF9
+/// - Trail bytes: 0x40-0x7E, 0xA1-0xFE
 fn is_valid_big5(data: &[u8]) -> bool {
     let mut i = 0;
     while i < data.len() {
@@ -242,6 +348,13 @@ fn is_valid_big5(data: &[u8]) -> bool {
     true
 }
 
+/// Validate Johab byte sequences.
+///
+/// # Johab Structure
+///
+/// - ASCII: 0x00-0x7F
+/// - Lead bytes: 0x84-0xD3, 0xD8-0xDE, 0xE0-0xF9
+/// - Trail bytes: 0x31-0x7E, 0x81-0xFE
 fn is_valid_johab(data: &[u8]) -> bool {
     let mut i = 0;
     while i < data.len() {
@@ -268,6 +381,14 @@ fn is_valid_johab(data: &[u8]) -> bool {
     true
 }
 
+/// Validate HZ-GB-2312 byte sequences.
+///
+/// # HZ-GB-2312 Structure
+///
+/// - ASCII mode: bytes < 0x80 (except ~)
+/// - GB mode: `~{` enters, `~}` exits
+/// - In GB mode: pairs of bytes in 0x21-0x7E
+/// - Escaped tilde: `~~` represents literal ~
 fn is_valid_hz(data: &[u8]) -> bool {
     // HZ-GB-2312 uses ~{ and ~} to shift in/out of GB mode
     // In GB mode, characters are pairs of bytes in 0x21-0x7E

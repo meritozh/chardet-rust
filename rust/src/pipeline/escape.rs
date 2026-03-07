@@ -1,8 +1,81 @@
 //! Early detection of escape-sequence-based encodings (ISO-2022, HZ-GB-2312, UTF-7).
+//!
+//! This module detects character encodings that use escape sequences or
+//! shift characters to switch between different character sets. These
+//! encodings are distinctive and can be detected with high confidence
+//! when their characteristic sequences are present.
+//!
+//! # Supported Encodings
+//!
+//! ## ISO-2022-JP Family
+//! - `iso2022-jp-2`: Base ISO-2022-JP with JIS X 0208
+//! - `iso2022-jp-2004`: Modern variant with JIS X 0213
+//! - `iso2022-jp-ext`: Extended variant with half-width katakana
+//!
+//! ## ISO-2022-KR
+//! - Korean variant using KS C 5601
+//!
+//! ## HZ-GB-2312
+//! - Chinese encoding using `~{` and `~}` shift sequences
+//!
+//! ## UTF-7
+//! - 7-bit safe Unicode using `+Base64-` sequences
 
 use super::{DetectionResult, DETERMINISTIC_CONFIDENCE};
 
 /// Detect ISO-2022, HZ-GB-2312, and UTF-7 from escape/tilde/plus sequences.
+///
+/// This function looks for distinctive markers that indicate escape-sequence-based
+/// encodings. These encodings are stateful - they switch between different
+/// character sets using escape or shift sequences.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+///
+/// # Returns
+///
+/// - `Some(DetectionResult)` with encoding and confidence 0.95 if detected
+/// - `None` if no escape-sequence encoding is found
+///
+/// # Detection Criteria
+///
+/// ## ISO-2022-JP
+/// Requires ESC sequences:
+/// - `ESC $ B` or `ESC $ @` (JIS X 0208)
+/// - `ESC (J` (ASCII/JIS-Roman)
+///
+/// Variants:
+/// - `iso2022-jp-2004`: Additional `ESC $(O` or `ESC $(P` (JIS X 0213)
+/// - `iso2022-jp-ext`: Contains SI (0x0E) and SO (0x0F) markers
+///
+/// ## ISO-2022-KR
+/// Requires: `ESC $ ) C` (KS C 5601 designation)
+///
+/// ## HZ-GB-2312
+/// Requires:
+/// - `~{` and `~}` markers
+/// - Valid GB2312 byte pairs (0x21-0x7E) between markers
+///
+/// ## UTF-7
+/// Requires:
+/// - `+` followed by Base64 characters
+/// - All bytes < 0x80 (7-bit clean)
+/// - Valid UTF-16BE after decoding
+///
+/// # Examples
+///
+/// ```
+/// use chardet_rs::pipeline::escape::detect_escape_encoding;
+///
+/// // ISO-2022-JP (ESC $ B)
+/// let iso2022 = b"\x1B$B$H$/$F".to_vec();
+/// let result = detect_escape_encoding(&iso2022);
+/// assert!(result.is_some());
+///
+/// // No escape sequences
+/// assert!(detect_escape_encoding(b"Hello").is_none());
+/// ```
 pub fn detect_escape_encoding(data: &[u8]) -> Option<DetectionResult> {
     let has_esc = data.contains(&0x1B);
     let has_tilde = data.contains(&b'~');
@@ -80,6 +153,16 @@ pub fn detect_escape_encoding(data: &[u8]) -> Option<DetectionResult> {
     None
 }
 
+/// Check if data contains a specific byte subsequence.
+///
+/// # Arguments
+///
+/// * `data` - The haystack to search in
+/// * `pattern` - The needle to search for
+///
+/// # Returns
+///
+/// `true` if the pattern appears anywhere in data.
 fn contains_subsequence(data: &[u8], pattern: &[u8]) -> bool {
     if pattern.is_empty() || data.len() < pattern.len() {
         return false;
@@ -87,8 +170,19 @@ fn contains_subsequence(data: &[u8], pattern: &[u8]) -> bool {
     data.windows(pattern.len()).any(|window| window == pattern)
 }
 
+/// Validate HZ-GB-2312 regions contain valid GB2312 byte pairs.
+///
+/// HZ-GB-2312 uses `~{` to enter GB mode and `~}` to exit. In GB mode,
+/// characters are encoded as pairs of bytes in the range 0x21-0x7E.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to validate
+///
+/// # Returns
+///
+/// `true` if at least one `~{...~}` region contains valid GB2312 pairs.
 fn has_valid_hz_regions(data: &[u8]) -> bool {
-    // Check that at least one ~{...~} region contains valid GB2312 byte pairs.
     let mut start = 0;
     loop {
         let begin = find_subsequence(&data[start..], b"~{");
@@ -114,6 +208,16 @@ fn has_valid_hz_regions(data: &[u8]) -> bool {
     }
 }
 
+/// Find the first occurrence of a byte subsequence.
+///
+/// # Arguments
+///
+/// * `data` - The haystack to search in
+/// * `pattern` - The needle to search for
+///
+/// # Returns
+///
+/// The starting index of the first match, or `None` if not found.
 fn find_subsequence(data: &[u8], pattern: &[u8]) -> Option<usize> {
     if pattern.is_empty() || data.len() < pattern.len() {
         return None;
@@ -122,9 +226,28 @@ fn find_subsequence(data: &[u8], pattern: &[u8]) -> Option<usize> {
         .position(|window| window == pattern)
 }
 
-// Base64 alphabet used inside UTF-7 shifted sequences (+<Base64>-)
+/// Base64 alphabet used inside UTF-7 shifted sequences (+<Base64>-).
 const B64_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+/// Check for valid UTF-7 shifted sequences.
+///
+/// UTF-7 uses `+` to shift into Base64 mode and `-` (or non-Base64 char) to shift out.
+/// The Base64 content decodes to UTF-16BE code units.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+///
+/// # Returns
+///
+/// `true` if valid UTF-7 sequences are found.
+///
+/// # Validation Criteria
+///
+/// 1. `+` followed by at least 2 Base64 characters
+/// 2. Base64 content decodes to valid UTF-16BE (no lone surrogates)
+/// 3. Either explicit `-` terminator or implicit terminator (non-Base64)
+/// 4. Not embedded in a Base64 stream (e.g., not inside email headers)
 fn has_valid_utf7_sequences(data: &[u8]) -> bool {
     let mut start = 0;
     let mut high_confidence_count = 0;
@@ -210,7 +333,18 @@ fn has_valid_utf7_sequences(data: &[u8]) -> bool {
     false
 }
 
-/// Check if a Unicode code point is in a commonly-used block
+/// Check if a Unicode code point is in a commonly-used block.
+///
+/// This heuristic helps distinguish real UTF-7 text from random Base64-looking
+/// data by checking if decoded characters are from commonly used Unicode blocks.
+///
+/// # Arguments
+///
+/// * `code_unit` - The UTF-16 code unit to check
+///
+/// # Returns
+///
+/// `true` if the character is from a commonly-used Unicode block.
 fn is_common_unicode_char(code_unit: u16) -> bool {
     match code_unit {
         // Basic Latin (ASCII)
@@ -358,7 +492,15 @@ fn is_common_unicode_char(code_unit: u16) -> bool {
     }
 }
 
-/// Decode the first UTF-16 code unit from UTF-7 base64 content
+/// Decode the first UTF-16 code unit from UTF-7 base64 content.
+///
+/// # Arguments
+///
+/// * `b64_bytes` - Base64-encoded UTF-7 content
+///
+/// # Returns
+///
+/// The first UTF-16 code unit, or `None` if insufficient data.
 fn decode_first_utf7_char(b64_bytes: &[u8]) -> Option<u16> {
     let n = b64_bytes.len();
     let total_bits = n * 6;
@@ -393,7 +535,15 @@ fn decode_first_utf7_char(b64_bytes: &[u8]) -> Option<u16> {
     }
 }
 
-/// Decode the second UTF-16 code unit from UTF-7 base64 content
+/// Decode the second UTF-16 code unit from UTF-7 base64 content.
+///
+/// # Arguments
+///
+/// * `b64_bytes` - Base64-encoded UTF-7 content
+///
+/// # Returns
+///
+/// The second UTF-16 code unit, or `None` if insufficient data.
 fn decode_second_utf7_char(b64_bytes: &[u8]) -> Option<u16> {
     let n = b64_bytes.len();
     let total_bits = n * 6;
@@ -429,6 +579,19 @@ fn decode_second_utf7_char(b64_bytes: &[u8]) -> Option<u16> {
     }
 }
 
+/// Check if a '+' character is embedded in a Base64 stream.
+///
+/// This helps avoid false positives where '+' appears in Base64 content
+/// (like email headers) but isn't actually a UTF-7 shift sequence.
+///
+/// # Arguments
+///
+/// * `data` - The full data buffer
+/// * `pos` - The position of the '+' character
+///
+/// # Returns
+///
+/// `true` if the '+' appears to be embedded in a Base64 context.
 fn is_embedded_in_base64(data: &[u8], pos: usize) -> bool {
     // Return True if the '+' at pos is embedded in a base64 stream
     let mut count = 0;
@@ -458,6 +621,18 @@ fn is_embedded_in_base64(data: &[u8], pos: usize) -> bool {
     count >= 4
 }
 
+/// Validate that Base64 content decodes to valid UTF-16BE.
+///
+/// UTF-7 requires that shifted sequences decode to valid UTF-16BE
+/// without lone surrogates.
+///
+/// # Arguments
+///
+/// * `b64_bytes` - Base64-encoded content
+///
+/// # Returns
+///
+/// `true` if the content decodes to valid UTF-16BE.
 fn is_valid_utf7_b64(b64_bytes: &[u8]) -> bool {
     // Check if base64 bytes decode to valid UTF-16BE.
     // Note: Unlike standard base64, UTF-7 doesn't require padding bits to be zero.
@@ -507,6 +682,15 @@ fn is_valid_utf7_b64(b64_bytes: &[u8]) -> bool {
     !prev_high
 }
 
+/// Decode a single Base64 character to its 6-bit value.
+///
+/// # Arguments
+///
+/// * `c` - The Base64 character
+///
+/// # Returns
+///
+/// The 6-bit value (0-63), or `None` if not a valid Base64 character.
 fn base64_decode(c: u8) -> Option<u8> {
     match c {
         b'A'..=b'Z' => Some(c - b'A'),

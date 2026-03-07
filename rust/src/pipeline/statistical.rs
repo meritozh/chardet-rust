@@ -1,10 +1,60 @@
 //! Stage 3: Statistical bigram scoring.
+//!
+//! This module performs statistical analysis of byte sequences to determine
+//! the most likely encoding. It uses either pre-trained bigram language models
+//! (when available) or simplified heuristic scoring as a fallback.
+//!
+//! # Bigram Model Scoring
+//!
+//! Bigram models capture the frequency distribution of byte pairs in text
+//! of a specific language and encoding. By comparing the input data's
+//! bigram profile to trained models, we can determine the best match.
+//!
+//! # Fallback Scoring
+//!
+//! When bigram models are not loaded, the system falls back to:
+//! - Byte frequency analysis for single-byte encodings
+//! - Multi-byte pattern detection for CJK encodings
 
 use crate::bigram_models::{models_loaded, score_best_language};
 use crate::pipeline::DetectionResult;
 use crate::registry::EncodingInfo;
 
 /// Score all candidates and return results sorted by confidence descending.
+///
+/// This is the main entry point for statistical encoding detection. It scores
+/// each candidate encoding and returns them sorted by confidence.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+/// * `candidates` - The list of candidate encodings to score
+///
+/// # Returns
+///
+/// A vector of `DetectionResult` sorted by confidence (highest first).
+///
+/// # Algorithm
+///
+/// 1. Check if bigram models are loaded
+/// 2. For each candidate:
+///    - If models available: use bigram model scoring
+///    - Otherwise: use simplified heuristic scoring
+/// 3. Sort results by confidence descending
+/// 4. Clamp confidence values to [0.0, 1.0]
+///
+/// # Examples
+///
+/// ```
+/// use chardet_rs::pipeline::statistical::score_candidates;
+/// use chardet_rs::registry::{REGISTRY, get_candidates};
+/// use chardet_rs::enums::EncodingEra;
+///
+/// let data = b"Hello, World!";
+/// let candidates = get_candidates(EncodingEra::All);
+/// let results = score_candidates(data, &candidates);
+/// assert!(!results.is_empty());
+/// ```
 pub fn score_candidates(data: &[u8], candidates: &[&EncodingInfo]) -> Vec<DetectionResult> {
     if data.is_empty() || candidates.is_empty() {
         return vec![];
@@ -38,7 +88,20 @@ pub fn score_candidates(data: &[u8], candidates: &[&EncodingInfo]) -> Vec<Detect
         .collect()
 }
 
-/// Score using pre-trained bigram models
+/// Score using pre-trained bigram language models.
+///
+/// When bigram models are loaded, this function uses them to perform
+/// language-specific scoring. For single-language encodings, the language
+/// is directly determined from the registry.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+/// * `enc` - The encoding to score against
+///
+/// # Returns
+///
+/// A tuple of (confidence_score, language_code).
 fn score_with_models(data: &[u8], enc: &EncodingInfo) -> (f64, Option<String>) {
     // For single-language encodings, use the language directly
     let single_lang = if enc.languages.len() == 1 {
@@ -56,7 +119,26 @@ fn score_with_models(data: &[u8], enc: &EncodingInfo) -> (f64, Option<String>) {
     (score, language)
 }
 
-/// Simplified scoring without models (fallback)
+/// Simplified scoring without models (fallback).
+///
+/// When bigram models are not available, this function provides basic
+/// heuristic scoring based on byte frequency patterns.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+/// * `enc` - The encoding to score against
+///
+/// # Returns
+///
+/// A tuple of (confidence_score, language_code).
+///
+/// # Scoring Logic
+///
+/// - **UTF-8**: High confidence if non-ASCII bytes present, 0 otherwise
+/// - **ASCII**: Maximum confidence only if no non-ASCII bytes
+/// - **Single-byte**: Based on high-byte entropy
+/// - **Multi-byte**: Based on characteristic byte patterns
 fn score_simplified(data: &[u8], enc: &EncodingInfo) -> (f64, Option<String>) {
     // Create a simple frequency profile of the data
     let profile = create_byte_profile(data);
@@ -108,6 +190,9 @@ fn score_simplified(data: &[u8], enc: &EncodingInfo) -> (f64, Option<String>) {
 }
 
 /// A simple byte frequency profile.
+///
+/// Tracks the occurrence count of each byte value (0-255) in the input data.
+/// This is used for entropy calculations and pattern matching.
 pub struct ByteProfile {
     /// Byte frequencies (0-255)
     pub frequencies: [u32; 256],
@@ -124,6 +209,15 @@ impl Default for ByteProfile {
     }
 }
 
+/// Create a byte frequency profile from data.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to profile
+///
+/// # Returns
+///
+/// A `ByteProfile` with frequency counts for each byte value.
 fn create_byte_profile(data: &[u8]) -> ByteProfile {
     let mut profile = ByteProfile::default();
     profile.total = data.len();
@@ -135,6 +229,19 @@ fn create_byte_profile(data: &[u8]) -> ByteProfile {
     profile
 }
 
+/// Score multi-byte encoding based on characteristic byte patterns.
+///
+/// Each CJK encoding has characteristic byte ranges for lead bytes.
+/// This function checks for the presence of bytes in those ranges.
+///
+/// # Arguments
+///
+/// * `name` - The encoding name
+/// * `profile` - The byte frequency profile
+///
+/// # Returns
+///
+/// A confidence score based on the presence of characteristic bytes.
 fn score_multibyte_patterns(name: &str, profile: &ByteProfile) -> f64 {
     match name {
         "shift_jis_2004" | "cp932" => {
@@ -182,6 +289,26 @@ fn score_multibyte_patterns(name: &str, profile: &ByteProfile) -> f64 {
     }
 }
 
+/// Calculate Shannon entropy of a frequency distribution.
+///
+/// Entropy measures the randomness or information content of a distribution.
+/// Higher entropy indicates more uniform distribution (more "random" data).
+///
+/// # Arguments
+///
+/// * `frequencies` - The frequency distribution
+///
+/// # Returns
+///
+/// Normalized entropy value from 0.0 to 1.0.
+///
+/// # Formula
+///
+/// ```text
+/// H = -sum(p(x) * log2(p(x))) / log2(n)
+/// ```
+///
+/// Where p(x) is the probability of each symbol and n is the alphabet size.
 fn calculate_entropy(frequencies: &[u32]) -> f64 {
     let total: u32 = frequencies.iter().sum();
     if total == 0 {

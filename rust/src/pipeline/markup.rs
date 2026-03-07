@@ -1,10 +1,77 @@
 //! Stage 1b: HTML/XML charset declaration extraction.
+//!
+//! This module extracts charset declarations from HTML and XML documents.
+//! When a document explicitly declares its encoding in a meta tag or XML
+//! declaration, we can use that information with high confidence.
+//!
+//! # Supported Declarations
+//!
+//! ## XML
+//! ```xml
+//! <?xml version="1.0" encoding="UTF-8"?>
+//! ```
+//!
+//! ## HTML5
+//! ```html
+//! <meta charset="utf-8">
+//! ```
+//!
+//! ## HTML4
+//! ```html
+//! <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+//! ```
 
 use super::{DetectionResult, DETERMINISTIC_CONFIDENCE};
 
+/// Maximum bytes to scan for charset declarations.
+///
+/// Charset declarations typically appear early in HTML/XML documents.
+/// We limit scanning to the first 4KB for performance.
 const SCAN_LIMIT: usize = 4096;
 
 /// Scan the first bytes of data for an HTML/XML charset declaration.
+///
+/// This function looks for charset declarations in three places:
+/// 1. XML encoding declaration (<?xml ... encoding="..."?>)
+/// 2. HTML5 meta charset tag
+/// 3. HTML4 http-equiv Content-Type meta tag
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+///
+/// # Returns
+///
+/// - `Some(DetectionResult)` with the declared encoding and confidence 0.95
+/// - `None` if no declaration is found or if the declared encoding fails validation
+///
+/// # Algorithm
+///
+/// 1. Scan only the first SCAN_LIMIT bytes for performance
+/// 2. Check for XML declaration first (must be at document start)
+/// 3. Search for HTML5 `<meta charset>` tags
+/// 4. Search for HTML4 `<meta http-equiv="Content-Type">` tags
+/// 5. Normalize the declared encoding name
+/// 6. Validate that the data is consistent with the declared encoding
+///
+/// # Examples
+///
+/// ```
+/// use chardet_rs::pipeline::markup::detect_markup_charset;
+///
+/// // HTML5 meta charset
+/// let html = b"<html><head><meta charset=\"utf-8\">";
+/// let result = detect_markup_charset(html);
+/// assert!(result.is_some());
+///
+/// // XML declaration
+/// let xml = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
+/// let result = detect_markup_charset(xml);
+/// assert!(result.is_some());
+///
+/// // No declaration
+/// assert!(detect_markup_charset(b"Hello").is_none());
+/// ```
 pub fn detect_markup_charset(data: &[u8]) -> Option<DetectionResult> {
     if data.is_empty() {
         return None;
@@ -12,7 +79,7 @@ pub fn detect_markup_charset(data: &[u8]) -> Option<DetectionResult> {
 
     let head = &data[..data.len().min(SCAN_LIMIT)];
 
-    // Check for XML encoding declaration
+    // Check for XML encoding declaration first
     if let Some(raw_encoding) = detect_xml_encoding(head) {
         if let Some(encoding) = normalize_declared_encoding(&raw_encoding) {
             if validate_bytes(data, &encoding) {
@@ -54,6 +121,23 @@ pub fn detect_markup_charset(data: &[u8]) -> Option<DetectionResult> {
     None
 }
 
+/// Extract encoding from XML declaration.
+///
+/// Looks for: `<?xml ... encoding="..."?>`
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+///
+/// # Returns
+///
+/// The declared encoding name, or `None` if not found.
+///
+/// # Parsing Rules
+///
+/// 1. Document must start with `<?xml`
+/// 2. Find `encoding` attribute (case-insensitive)
+/// 3. Extract value between matching quotes
 fn detect_xml_encoding(data: &[u8]) -> Option<String> {
     // Look for <?xml ... encoding="..."?>
     let prefix = b"<?xml";
@@ -101,6 +185,24 @@ fn detect_xml_encoding(data: &[u8]) -> Option<String> {
     }
 }
 
+/// Extract charset from HTML5 meta tag.
+///
+/// Looks for: `<meta charset="...">`
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+///
+/// # Returns
+///
+/// The declared charset name, or `None` if not found.
+///
+/// # Parsing Rules
+///
+/// 1. Search for `<meta` tags (case-insensitive)
+/// 2. Look for `charset` attribute
+/// 3. Handle quoted and unquoted values
+/// 4. Stop at tag end
 fn detect_html5_charset(data: &[u8]) -> Option<String> {
     // Look for <meta charset="...">
     let data_lower = data.to_ascii_lowercase();
@@ -157,6 +259,24 @@ fn detect_html5_charset(data: &[u8]) -> Option<String> {
     None
 }
 
+/// Extract charset from HTML4 meta http-equiv tag.
+///
+/// Looks for: `<meta http-equiv="Content-Type" content="...; charset=...">`
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+///
+/// # Returns
+///
+/// The declared charset name, or `None` if not found.
+///
+/// # Parsing Rules
+///
+/// 1. Search for `<meta` tags
+/// 2. Look for `http-equiv="Content-Type"` or similar
+/// 3. Find `content` attribute with `charset=` parameter
+/// 4. Extract charset value
 fn detect_html4_charset(data: &[u8]) -> Option<String> {
     // Look for <meta http-equiv="Content-Type" content="...; charset=...">
     let data_lower = data.to_ascii_lowercase();
@@ -226,6 +346,16 @@ fn detect_html4_charset(data: &[u8]) -> Option<String> {
     None
 }
 
+/// Find the first occurrence of a byte subsequence.
+///
+/// # Arguments
+///
+/// * `data` - The haystack to search in
+/// * `pattern` - The needle to search for
+///
+/// # Returns
+///
+/// The starting index of the first match, or `None` if not found.
 fn find_subsequence(data: &[u8], pattern: &[u8]) -> Option<usize> {
     if pattern.is_empty() || data.len() < pattern.len() {
         return None;
@@ -234,12 +364,37 @@ fn find_subsequence(data: &[u8], pattern: &[u8]) -> Option<usize> {
         .position(|window| window == pattern)
 }
 
+/// Case-insensitive search for a byte subsequence.
+///
+/// # Arguments
+///
+/// * `data` - The haystack to search in
+/// * `pattern` - The needle to search for
+///
+/// # Returns
+///
+/// The starting index of the first case-insensitive match, or `None`.
 fn find_case_insensitive(data: &[u8], pattern: &[u8]) -> Option<usize> {
     let data_lower = data.to_ascii_lowercase();
     let pattern_lower: Vec<u8> = pattern.iter().map(|&b| b.to_ascii_lowercase()).collect();
     find_subsequence(&data_lower, &pattern_lower)
 }
 
+/// Normalize a declared encoding name to a canonical form.
+///
+/// # Arguments
+///
+/// * `raw` - The raw encoding name from the document
+///
+/// # Returns
+///
+/// The normalized encoding name, or `None` if empty/invalid.
+///
+/// # Normalizations
+///
+/// | Input | Output |
+/// |-------|--------|
+/// | x-sjis, shift-jis | cp932 |
 fn normalize_declared_encoding(raw: &str) -> Option<String> {
     let normalized = raw
         .trim()
@@ -258,6 +413,22 @@ fn normalize_declared_encoding(raw: &str) -> Option<String> {
     Some(canonical.to_string())
 }
 
+/// Validate that data is consistent with the declared encoding.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to validate
+/// * `encoding` - The declared encoding name
+///
+/// # Returns
+///
+/// `true` if the data appears valid for the encoding.
+///
+/// # Note
+///
+/// This is a basic check. Full validation would require attempting to
+/// decode the entire content, which is expensive. We do a quick check
+/// for UTF-8 validity and assume other encodings are valid.
 fn validate_bytes(data: &[u8], encoding: &str) -> bool {
     // Check that data can be decoded under encoding without errors.
     // For now, we just do a basic check for common encodings.

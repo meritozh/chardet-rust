@@ -1,19 +1,83 @@
-//! Stage 1a+: UTF-16/UTF-32 detection for data without BOM.
+//! Stage 0b: UTF-16/UTF-32 detection for data without BOM.
+//!
+//! This module detects UTF-16 and UTF-32 encoded text even when no BOM is present.
+//! It analyzes null-byte patterns and validates the resulting codepoints to
+//! distinguish text from binary data.
+//!
+//! # Detection Strategy
+//!
+//! ## UTF-32 Detection
+//! - BE: First two bytes of each 4-byte unit are null for BMP characters
+//! - LE: Last two bytes of each 4-byte unit are null for BMP characters
+//! - Validates codepoints are valid Unicode (<= U+10FFFF)
+//! - Checks that decoded text looks like text (>70% printable)
+//!
+//! ## UTF-16 Detection
+//! - Counts null bytes in even vs odd positions
+//! - ASCII text in UTF-16-LE has nulls at odd positions
+//! - ASCII text in UTF-16-BE has nulls at even positions
+//! - Validates surrogate pairs (no lone surrogates)
 
 use super::{DetectionResult, DETERMINISTIC_CONFIDENCE};
 use crate::pipeline::binary;
 
-// How many bytes to sample for pattern analysis
+/// Sample size for UTF-16/32 pattern analysis.
+///
+/// We limit analysis to the first 4KB to avoid scanning large files.
 const SAMPLE_SIZE: usize = 4096;
 
-// Minimum bytes needed for reliable pattern detection
-const MIN_BYTES_UTF32: usize = 16; // 4 full code units
-const MIN_BYTES_UTF16: usize = 10; // 5 full code units
+/// Minimum bytes needed for reliable UTF-32 detection.
+///
+/// Need at least 4 full code units (16 bytes) for pattern analysis.
+const MIN_BYTES_UTF32: usize = 16;
 
-// Minimum fraction of null bytes in the expected position for UTF-16.
+/// Minimum bytes needed for reliable UTF-16 detection.
+///
+/// Need at least 5 full code units (10 bytes) for pattern analysis.
+const MIN_BYTES_UTF16: usize = 10;
+
+/// Minimum fraction of null bytes in expected positions for UTF-16.
+///
+/// For UTF-16 with ASCII text, we expect null bytes in every other position.
+/// This threshold allows for some non-ASCII characters while still detecting
+/// the encoding.
 const UTF16_MIN_NULL_FRACTION: f64 = 0.03;
 
-/// Detect UTF-32 or UTF-16 encoding from null-byte patterns.
+/// Detect UTF-16 or UTF-32 encoding from null-byte patterns.
+///
+/// This function analyzes null-byte distribution to detect UTF-16 and UTF-32
+/// encodings even without a BOM. It also validates that the decoded content
+/// looks like text (not binary data with coincidental patterns).
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+///
+/// # Returns
+///
+/// - `Some(DetectionResult)` with encoding (utf-16-be, utf-16-le, utf-32-be, utf-32-le)
+///   and confidence 0.95 if detected
+/// - `None` if no UTF-16/32 pattern is detected
+///
+/// # Algorithm
+///
+/// 1. Skip binary files (they may have null bytes but shouldn't be detected as text)
+/// 2. Try UTF-32 detection first (more specific pattern)
+/// 3. Fall back to UTF-16 detection
+///
+/// # Examples
+///
+/// ```
+/// use chardet_rs::pipeline::utf1632::detect_utf1632_patterns;
+///
+/// // UTF-16-LE pattern (ASCII with nulls after each char)
+/// let data: Vec<u8> = b"A\x00B\x00C\x00".to_vec();
+/// let result = detect_utf1632_patterns(&data);
+/// // May detect as UTF-16-LE depending on pattern strength
+///
+/// // Too short
+/// assert!(detect_utf1632_patterns(b"AB").is_none());
+/// ```
 pub fn detect_utf1632_patterns(data: &[u8]) -> Option<DetectionResult> {
     let sample = &data[..data.len().min(SAMPLE_SIZE)];
 
@@ -36,6 +100,26 @@ pub fn detect_utf1632_patterns(data: &[u8]) -> Option<DetectionResult> {
     check_utf16(sample)
 }
 
+/// Check for UTF-32 encoding patterns.
+///
+/// UTF-32 encodes each character as a 4-byte value. For BMP characters
+/// (U+0000-U+FFFF), this means two null bytes per character.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+///
+/// # Returns
+///
+/// Detection result if UTF-32 pattern is found and validated.
+///
+/// # UTF-32-BE Detection
+/// - First byte of each 4-byte unit is 0x00 for BMP
+/// - Second byte is often 0x00 for BMP
+///
+/// # UTF-32-LE Detection
+/// - Fourth byte of each 4-byte unit is 0x00 for BMP
+/// - Third byte is often 0x00 for BMP
 fn check_utf32(data: &[u8]) -> Option<DetectionResult> {
     // Trim to a multiple of 4 bytes
     let trimmed_len = data.len() - (data.len() % 4);
@@ -103,6 +187,26 @@ fn check_utf32(data: &[u8]) -> Option<DetectionResult> {
     None
 }
 
+/// Check for UTF-16 encoding patterns.
+///
+/// UTF-16 encodes BMP characters as 2 bytes. For ASCII text, this means
+/// one null byte per character (either before or after the ASCII byte).
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to analyze
+///
+/// # Returns
+///
+/// Detection result if UTF-16 pattern is found and validated.
+///
+/// # UTF-16-BE Detection
+/// - Null bytes appear at even positions for ASCII text
+/// - Pattern: [0x00, 'A', 0x00, 'B', ...]
+///
+/// # UTF-16-LE Detection
+/// - Null bytes appear at odd positions for ASCII text
+/// - Pattern: ['A', 0x00, 'B', 0x00, ...]
 fn check_utf16(data: &[u8]) -> Option<DetectionResult> {
     let sample_len = data.len() - (data.len() % 2);
     if sample_len < MIN_BYTES_UTF16 {
@@ -162,8 +266,21 @@ fn check_utf16(data: &[u8]) -> Option<DetectionResult> {
     }
 }
 
+/// Validate UTF-16 data for proper surrogate pair usage.
+///
+/// # Arguments
+///
+/// * `data` - The byte sequence to validate
+/// * `is_be` - True if big-endian, false if little-endian
+///
+/// # Returns
+///
+/// `true` if the data contains valid UTF-16 sequences:
+/// - No lone surrogates (U+D800-U+DFFF must appear in valid pairs)
+/// - No consecutive high surrogates
+/// - No high surrogate at end without following low surrogate
 fn validate_utf16(data: &[u8], is_be: bool) -> bool {
-    // Basic validation: try to decode and check for invalid sequences
+    // Decode to 16-bit code units
     let units: Vec<u16> = data
         .chunks_exact(2)
         .map(|c| {
@@ -179,11 +296,13 @@ fn validate_utf16(data: &[u8], is_be: bool) -> bool {
     let mut prev_high = false;
     for unit in &units {
         if (0xD800..=0xDBFF).contains(unit) {
+            // High surrogate
             if prev_high {
                 return false; // Consecutive high surrogates
             }
             prev_high = true;
         } else if (0xDC00..=0xDFFF).contains(unit) {
+            // Low surrogate
             if !prev_high {
                 return false; // Lone low surrogate
             }
@@ -195,11 +314,28 @@ fn validate_utf16(data: &[u8], is_be: bool) -> bool {
         }
     }
 
-    !prev_high
+    !prev_high // Should not end with unpaired high surrogate
 }
 
+/// Check if decoded codepoints look like text.
+///
+/// This heuristic filters out binary data that happens to have valid
+/// UTF-16/32 patterns but doesn't represent text.
+///
+/// # Arguments
+///
+/// * `codepoints` - The decoded Unicode codepoints
+///
+/// # Returns
+///
+/// `true` if more than 70% of codepoints are printable text.
+///
+/// # Excluded Characters
+///
+/// - Control characters (except tab, LF, CR)
+/// - Surrogates (U+D800-U+DFFF)
+/// - Private use areas (U+E000-U+F8FF, etc.)
 fn looks_like_text(codepoints: &[u32]) -> bool {
-    // Quick check: is decoded text mostly printable characters
     if codepoints.is_empty() {
         return false;
     }
