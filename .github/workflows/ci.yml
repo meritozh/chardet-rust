@@ -42,7 +42,7 @@ jobs:
       - run: uv sync
       - uses: dtolnay/rust-toolchain@stable
       - run: uv pip install -e rust
-      - run: uv run pytest tests/ -q --tb=short --ignore=tests/test_accuracy.py --cov --cov-report=xml --cov-report=term-missing
+      - run: uv run pytest tests/ -q --tb=short --cov --cov-report=xml --cov-report=term-missing
         env:
           PYTHONPATH: rust
       - name: Upload coverage to Codecov
@@ -80,6 +80,6 @@ jobs:
         env:
           PYTHONPATH: rust
       - name: Run full test suite
-        run: uv run pytest tests/ -q --tb=short --ignore=tests/test_accuracy.py --cov --cov-report=term-missing
+        run: uv run pytest tests/ -q --tb=short --cov --cov-report=term-missing
         env:
           PYTHONPATH: rust
