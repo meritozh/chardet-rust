@@ -6,11 +6,14 @@ Universal character encoding detector — Rust-powered fork of [chardet 7.0](htt
 [![PyPI](https://img.shields.io/pypi/v/chardet-rust)](https://pypi.org/project/chardet-rust/)
 
 > [!NOTE]
-> This is a fork of the [chardet 7.0 Rust rewrite](https://github.com/chardet/chardet).
+> This is a fork of the [chardet 7.0 rewrite](https://github.com/chardet/chardet).
 > It is published as `chardet-rust` on PyPI and is **not** an official release of the upstream `chardet` project.
 
 > [!WARNING]
 > The upstream chardet 7.0 rewrite is an AI experiment and is not an official upstream replacement.
+
+> [!NOTE]
+> This Rust port was created to the most part with [Kimi](https://www.kimi.com/) (Kimi 2.5).
 
 ## Performance (from upstream chardet 7.0)
 
