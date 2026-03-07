@@ -6,6 +6,7 @@ pub mod bigram_models;
 pub mod detector;
 pub mod enums;
 pub mod equivalences;
+pub mod equivalences_full;
 pub mod models;
 pub mod pipeline;
 pub mod registry;
