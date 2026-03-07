@@ -45,7 +45,7 @@ pub fn run_pipeline(
             .into_iter()
             .find(|e| e.name == enc_name.as_str())
         {
-            if encoding_era.contains(&enc_info.era) {
+            if encoding_era.contains(enc_info.era) {
                 return vec![result];
             }
         }

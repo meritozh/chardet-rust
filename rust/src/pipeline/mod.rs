@@ -33,7 +33,10 @@
 //! each stage in order and handling early exits for deterministic detections.
 
 use crate::equivalences::apply_legacy_rename;
+
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
+#[cfg(feature = "python")]
 use pyo3::types::PyDict;
 
 pub mod ascii;
@@ -138,6 +141,7 @@ impl DetectionResult {
     ///
     /// Uses the deprecated `into_py` method for compatibility with
     /// the current PyO3 version.
+    #[cfg(feature = "python")]
     #[allow(deprecated)]
     pub fn to_py_dict(&self, py: Python, apply_rename: bool) -> PyResult<PyObject> {
         let dict = PyDict::new(py);

@@ -1,9 +1,10 @@
 //! Enumerations for chardet.
 
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
 
 /// Bit flags representing encoding eras for filtering detection candidates.
-#[pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "python", pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EncodingEra {
     /// Modern web encodings (UTF-8, Windows-1252, etc.)
@@ -22,6 +23,7 @@ pub enum EncodingEra {
     All = 63,
 }
 
+#[cfg(feature = "python")]
 #[pymethods]
 impl EncodingEra {
     /// Check if this era includes the given era flag.
@@ -95,6 +97,13 @@ impl EncodingEra {
     }
 }
 
+impl EncodingEra {
+    /// Check if this era includes the given era flag.
+    pub fn contains(&self, other: EncodingEra) -> bool {
+        (*self as i32 & other as i32) != 0
+    }
+}
+
 impl Default for EncodingEra {
     fn default() -> Self {
         EncodingEra::All
@@ -104,7 +113,7 @@ impl Default for EncodingEra {
 /// Language filter flags for UniversalDetector (chardet 6.x API compat).
 ///
 /// Accepted but not used — the pipeline does not filter by language group.
-#[pyclass(eq, eq_int)]
+#[cfg_attr(feature = "python", pyclass(eq, eq_int))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum LanguageFilter {
@@ -120,6 +129,7 @@ pub enum LanguageFilter {
     CJK = 0x0F,
 }
 
+#[cfg(feature = "python")]
 #[pymethods]
 impl LanguageFilter {
     /// Bitwise AND operation - handles both LanguageFilter and int
@@ -160,14 +170,6 @@ impl LanguageFilter {
     pub fn __int__(&self) -> i32 {
         *self as i32
     }
-}
-
-impl LanguageFilter {
-    /// Get Chinese (simplified + traditional).
-    pub const CHINESE: LanguageFilter = LanguageFilter::CHINESE_SIMPLIFIED;
-
-    /// Get CJK (all Chinese, Japanese, Korean).
-    pub const CJK: LanguageFilter = LanguageFilter::JAPANESE;
 }
 
 impl Default for LanguageFilter {
