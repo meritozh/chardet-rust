@@ -13,11 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v7
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          python-version: "3.14"
-      - run: uv sync
-      - run: uv run prek run --all-files --show-diff-on-failure
+          components: clippy
+      - run: cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings
 
   test:
     runs-on: ${{ matrix.os }}
