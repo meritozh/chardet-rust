@@ -81,7 +81,7 @@ pub fn detect_bom(data: &[u8]) -> Option<DetectionResult> {
             // a UTF-32 BOM is a valid number of UTF-32 code units (multiple of 4 bytes).
             if bom_bytes.len() == 4 {
                 let payload_len = data.len() - bom_bytes.len();
-                if payload_len % 4 != 0 {
+                if !payload_len.is_multiple_of(4) {
                     // Not a valid UTF-32 length, skip this BOM
                     continue;
                 }

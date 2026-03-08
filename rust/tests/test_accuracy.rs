@@ -42,76 +42,76 @@ fn known_failures_count() -> usize {
 fn collect_test_files() -> Vec<(String, String, PathBuf)> {
     let mut files = Vec::new();
     let data_dir = Path::new("../tests/data");
-    
+
     if !data_dir.exists() {
         // Try alternative path
         return collect_test_files_alt();
     }
-    
+
     for entry in fs::read_dir(data_dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        
+
         if !path.is_dir() {
             continue;
         }
-        
+
         let dir_name = path.file_name().unwrap().to_str().unwrap();
-        
+
         // Parse directory name: "encoding-language" format
         // Split on the LAST hyphen since encoding names can contain hyphens
         let parts: Vec<&str> = dir_name.rsplitn(2, '-').collect();
         if parts.len() != 2 {
             continue;
         }
-        
+
         // rsplitn returns iterator in reverse order, so parts[0] is language, parts[1] is encoding
         let language = parts[0].to_string();
         let encoding = parts[1].to_string();
-        
+
         // Special case for "None-None" (binary files)
         let encoding = if encoding == "None" {
             None
         } else {
             Some(encoding)
         };
-        
+
         // Recursively collect files in this directory
         collect_files_recursive(&path, encoding, language, &mut files);
     }
-    
+
     files
 }
 
 /// Alternative path collection (when running from rust/ directory).
 fn collect_test_files_alt() -> Vec<(String, String, PathBuf)> {
     let mut files = Vec::new();
-    
+
     // Try different relative paths
     let possible_paths = [
         Path::new("../tests/data"),
         Path::new("tests/data"),
         Path::new("../../tests/data"),
     ];
-    
+
     let data_dir = possible_paths.iter()
         .find(|p| p.exists())
         .cloned()
         .unwrap_or(Path::new("../tests/data"));
-    
+
     for entry in fs::read_dir(data_dir).unwrap_or_else(|_| {
         // Return empty iterator if directory doesn't exist
         panic!("Test data directory not found: {:?}", data_dir)
     }) {
         let entry = entry.unwrap();
         let path = entry.path();
-        
+
         if !path.is_dir() {
             continue;
         }
-        
+
         let dir_name = path.file_name().unwrap().to_str().unwrap();
-        
+
         // Parse directory name: "encoding-language" format.
         // Split on the LAST hyphen since encoding names can contain hyphens.
         let parts: Vec<&str> = dir_name.rsplitn(2, '-').collect();
@@ -122,18 +122,18 @@ fn collect_test_files_alt() -> Vec<(String, String, PathBuf)> {
         // rsplitn returns iterator in reverse order, so parts[0] is language, parts[1] is encoding
         let language = parts[0].to_string();
         let encoding = parts[1].to_string();
-        
+
         // Special case for "None-None" (binary files)
         let encoding = if encoding == "None" {
             None
         } else {
             Some(encoding)
         };
-        
+
         // Recursively collect files in this directory
         collect_files_recursive(&path, encoding, language, &mut files);
     }
-    
+
     files
 }
 
@@ -147,7 +147,7 @@ fn collect_files_recursive(
     for entry in fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        
+
         if path.is_dir() {
             collect_files_recursive(&path, encoding.clone(), language.clone(), files);
         } else if path.is_file() {
@@ -178,7 +178,7 @@ fn generate_test_cases() -> Vec<TestCase> {
             let file_name = path.file_name().unwrap().to_str().unwrap();
             let parent_name = path.parent().unwrap().file_name().unwrap().to_str().unwrap();
             let test_id = format!("{}/{}", parent_name, file_name);
-            
+
             TestCase {
                 expected_encoding: enc,
                 language: lang,
@@ -223,12 +223,11 @@ fn run_accuracy_tests(cases: &[TestCase]) -> (usize, usize, usize, Vec<String>) 
             let result = detect_bytes(&data, EncodingEra::All, 200_000);
 
             if case.expected_encoding == "None" {
-                if result.encoding.is_some() {
+                if let Some(encoding) = result.encoding {
                     local.failed += 1;
                     local.failures.push(format!(
                         "{}: expected binary (None), got={}",
-                        case.test_id,
-                        result.encoding.unwrap()
+                        case.test_id, encoding
                     ));
                 } else {
                     local.passed += 1;
@@ -273,15 +272,15 @@ fn run_accuracy_tests(cases: &[TestCase]) -> (usize, usize, usize, Vec<String>) 
 #[test]
 fn test_accuracy_all_files() {
     let cases = generate_test_cases();
-    
+
     // Skip if no test data found
     if cases.is_empty() {
         eprintln!("Warning: No test data files found, skipping accuracy tests");
         return;
     }
-    
+
     let (passed, failed, skipped_known, failures) = run_accuracy_tests(&cases);
-    
+
     // Print summary
     eprintln!("\nAccuracy Test Summary:");
     eprintln!("  Total test data cases discovered: {}", cases.len());
@@ -291,21 +290,21 @@ fn test_accuracy_all_files() {
     eprintln!("  Passed: {}", passed);
     eprintln!("  Failed: {}", failed);
     eprintln!("  Known failures baseline: {}", known_failures_count());
-    
+
     if !failures.is_empty() {
         eprintln!("\nFailures:");
         for f in &failures {
             eprintln!("  - {}", f);
         }
     }
-    
+
     // Calculate accuracy percentage
     let total = passed + failed;
     if total > 0 {
         let accuracy = (passed as f64 / total as f64) * 100.0;
         eprintln!("\nAccuracy: {:.1}%", accuracy);
     }
-    
+
     // Assert that we have reasonable accuracy
     // Known failures are excluded, so we expect near 100% on the rest
     // Current Rust implementation achieves ~68.7% vs Python's ~95%+
@@ -327,22 +326,22 @@ fn test_accuracy_all_files() {
 fn test_accuracy_with_known_failures() {
     // This test includes known failures and is expected to have lower accuracy
     let cases = generate_test_cases();
-    
+
     if cases.is_empty() {
         eprintln!("Warning: No test data files found");
         return;
     }
-    
+
     let mut passed = 0;
     let mut failed = 0;
     let mut known_failed = 0;
-    
+
     for case in &cases {
         let data = match fs::read(&case.file_path) {
             Ok(d) => d,
             Err(_) => continue,
         };
-        
+
         let result = detect_bytes(&data, EncodingEra::All, 200_000);
         let is_known = is_known_failure(&case.test_id);
         let detected_renamed = result.encoding.as_deref().map(apply_legacy_rename);
@@ -352,7 +351,7 @@ fn test_accuracy_with_known_failures() {
         } else {
             check_correct(Some(&case.expected_encoding), Some(detected))
         };
-        
+
         if correct {
             passed += 1;
         } else if is_known {
@@ -361,19 +360,19 @@ fn test_accuracy_with_known_failures() {
             failed += 1;
         }
     }
-    
+
     let total = passed + failed + known_failed;
     eprintln!("\nAccuracy Test (with known failures):");
     eprintln!("  Total: {}", total);
     eprintln!("  Passed: {}", passed);
     eprintln!("  New failures: {}", failed);
     eprintln!("  Known failures: {}", known_failed);
-    
+
     if total > 0 {
         let accuracy = (passed + known_failed) as f64 / total as f64;
         eprintln!("  Overall accuracy: {:.1}%", accuracy * 100.0);
     }
-    
+
     // We shouldn't have any new (unexpected) failures
     assert_eq!(failed, 0, "Found {} unexpected failures", failed);
 }

@@ -12,7 +12,6 @@
 /// | U+0080-U+07FF | 110xxxxx 10xxxxxx |
 /// | U+0800-U+FFFF | 1110xxxx 10xxxxxx 10xxxxxx |
 /// | U+10000-U+10FFFF | 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx |
-
 use super::DetectionResult;
 
 /// Base confidence for UTF-8 detection.

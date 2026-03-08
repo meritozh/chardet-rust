@@ -58,7 +58,7 @@ pub fn detect_ascii(data: &[u8]) -> Option<DetectionResult> {
     // - Printable ASCII (0x20-0x7E)
     let is_ascii = data
         .iter()
-        .all(|&b| b == 0x09 || b == 0x0A || b == 0x0D || (b >= 0x20 && b <= 0x7E));
+        .all(|&b| b == 0x09 || b == 0x0A || b == 0x0D || (0x20..=0x7E).contains(&b));
 
     if is_ascii {
         Some(DetectionResult::new(Some("ascii"), 1.0, None))

@@ -60,7 +60,6 @@ fn test_detect_with_max_bytes() {
 fn test_detect_all_returns_vec() {
     let results = detect_all_bytes(b"Hello world", EncodingEra::All, 200_000, true);
     assert!(!results.is_empty());
-    assert!(results.len() >= 1);
 }
 
 #[test]
@@ -90,7 +89,6 @@ fn test_ignore_threshold_true_returns_all() {
     let data = "Héllo wörld café résumé".as_bytes();
     let results = detect_all_bytes(data, EncodingEra::All, 200_000, true);
     assert!(!results.is_empty());
-    assert!(results.len() >= 1);
 }
 
 #[test]

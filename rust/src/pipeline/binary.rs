@@ -127,7 +127,7 @@ pub fn is_binary(data: &[u8], max_bytes: usize) -> bool {
     let null_count: usize = data.iter().filter(|&&b| b == 0x00).count();
     let control_count: usize = data
         .iter()
-        .filter(|&&b| (b <= 0x08) || (b >= 0x10 && b <= 0x1A) || (b >= 0x1C && b <= 0x1F))
+        .filter(|&&b| (b <= 0x08) || (0x10..=0x1A).contains(&b) || (0x1C..=0x1F).contains(&b))
         .count();
 
     let binary_count = null_count + control_count;

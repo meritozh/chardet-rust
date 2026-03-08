@@ -229,8 +229,10 @@ impl Default for ByteProfile {
 ///
 /// A `ByteProfile` with frequency counts for each byte value.
 fn create_byte_profile(data: &[u8]) -> ByteProfile {
-    let mut profile = ByteProfile::default();
-    profile.total = data.len();
+    let mut profile = ByteProfile {
+        total: data.len(),
+        ..Default::default()
+    };
 
     for &b in data {
         profile.frequencies[b as usize] += 1;

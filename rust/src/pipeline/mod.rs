@@ -83,14 +83,14 @@ pub struct DetectionResult {
     /// A `None` encoding indicates that the content was detected as binary
     /// rather than text.
     pub encoding: Option<String>,
-    
+
     /// Confidence score from 0.0 to 1.0.
     ///
     /// - 1.0: Absolute confidence (e.g., BOM detection)
     /// - 0.95: High confidence (structural detection)
     /// - <0.20: Low confidence (statistical guess)
     pub confidence: f64,
-    
+
     /// Detected language as ISO 639-1 code, or None.
     ///
     /// Examples: "en", "ru", "ja", "zh"
@@ -193,17 +193,17 @@ pub struct PipelineContext {
     ///
     /// Maps encoding name to (valid_ratio, mb_byte_count, lead_diversity).
     pub analysis_cache: std::collections::HashMap<String, (f64, usize, usize)>,
-    
+
     /// Pre-computed non-ASCII byte count.
     ///
     /// Computed once and cached to avoid scanning the data multiple times.
     pub non_ascii_count: Option<usize>,
-    
+
     /// Multi-byte structural scores by encoding name.
     ///
     /// Caches the structural score for each multi-byte encoding.
     pub mb_scores: std::collections::HashMap<String, f64>,
-    
+
     /// Multi-byte byte coverage scores by encoding name.
     ///
     /// Caches the byte coverage score for each multi-byte encoding.

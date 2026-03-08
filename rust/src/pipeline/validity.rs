@@ -396,21 +396,19 @@ fn is_valid_hz(data: &[u8]) -> bool {
     let mut i = 0;
 
     while i < data.len() {
-        if data[i] == b'~' {
-            if i + 1 < data.len() {
-                if data[i + 1] == b'{' {
-                    in_gb_mode = true;
-                    i += 2;
-                    continue;
-                } else if data[i + 1] == b'}' {
-                    in_gb_mode = false;
-                    i += 2;
-                    continue;
-                } else if data[i + 1] == b'~' {
-                    // Escaped tilde
-                    i += 2;
-                    continue;
-                }
+        if data[i] == b'~' && i + 1 < data.len() {
+            if data[i + 1] == b'{' {
+                in_gb_mode = true;
+                i += 2;
+                continue;
+            } else if data[i + 1] == b'}' {
+                in_gb_mode = false;
+                i += 2;
+                continue;
+            } else if data[i + 1] == b'~' {
+                // Escaped tilde
+                i += 2;
+                continue;
             }
         }
 

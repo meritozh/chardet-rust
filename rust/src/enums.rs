@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 
 /// Bit flags representing encoding eras for filtering detection candidates.
 #[cfg_attr(feature = "python", pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE"))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum EncodingEra {
     /// Modern web encodings (UTF-8, Windows-1252, etc.)
     ModernWeb = 1,
@@ -20,6 +20,7 @@ pub enum EncodingEra {
     /// Mainframe encodings (EBCDIC, etc.)
     Mainframe = 32,
     /// All encodings
+    #[default]
     All = 63,
 }
 
@@ -99,17 +100,11 @@ impl EncodingEra {
     }
 }
 
-impl Default for EncodingEra {
-    fn default() -> Self {
-        EncodingEra::All
-    }
-}
-
 /// Language filter flags for UniversalDetector (chardet 6.x API compat).
 ///
 /// Accepted but not used — the pipeline does not filter by language group.
 #[cfg_attr(feature = "python", pyclass(eq, eq_int))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum LanguageFilter {
     CHINESE_SIMPLIFIED = 0x01,
@@ -117,6 +112,7 @@ pub enum LanguageFilter {
     JAPANESE = 0x04,
     KOREAN = 0x08,
     NON_CJK = 0x10,
+    #[default]
     ALL = 0x1F,
     /// Chinese (simplified + traditional)
     CHINESE = 0x03,
@@ -167,8 +163,4 @@ impl LanguageFilter {
     }
 }
 
-impl Default for LanguageFilter {
-    fn default() -> Self {
-        LanguageFilter::ALL
-    }
-}
+

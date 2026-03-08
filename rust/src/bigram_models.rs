@@ -11,7 +11,9 @@ const BIGRAM_TABLE_SIZE: usize = 65536;
 pub const NON_ASCII_BIGRAM_WEIGHT: i32 = 8;
 
 /// Cached models
-static MODELS: Lazy<Mutex<Option<HashMap<String, Vec<u8>>>>> = Lazy::new(|| Mutex::new(None));
+type ModelsMap = HashMap<String, Vec<u8>>;
+#[allow(clippy::type_complexity)]
+static MODELS: Lazy<Mutex<Option<ModelsMap>>> = Lazy::new(|| Mutex::new(None));
 
 /// Sparse weighted bigram profile built from input data.
 struct WeightedProfile {

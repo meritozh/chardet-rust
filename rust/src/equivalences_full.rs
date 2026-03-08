@@ -14,8 +14,7 @@ use once_cell::sync::Lazy;
 pub fn normalize_encoding_name(name: &str) -> String {
     let normalized = name
         .to_lowercase()
-        .replace('-', "")
-        .replace('_', "");
+        .replace(['-', '_'], "");
 
     // Match Python's codecs.lookup() canonicalization for common IBM aliases.
     match normalized.as_str() {
@@ -34,7 +33,7 @@ pub fn normalize_encoding_name(name: &str) -> String {
 /// when the expected encoding is the subset counts as correct.
 fn build_supersets() -> HashMap<String, HashSet<String>> {
     let mut map: HashMap<String, HashSet<String>> = HashMap::new();
-    
+
     let entries: &[(&str, &[&str])] = &[
         ("ascii", &["utf-8", "windows-1252"]),
         ("tis-620", &["iso-8859-11", "cp874"]),
@@ -70,7 +69,7 @@ fn build_supersets() -> HashMap<String, HashSet<String>> {
         ("iso-8859-15", &["windows-1252"]),
         ("iso-8859-16", &["windows-1250"]),
     ];
-    
+
     for (subset, supersets) in entries {
         let norm_subset = normalize_encoding_name(subset);
         let norm_supersets: HashSet<String> = supersets.iter()
@@ -78,7 +77,7 @@ fn build_supersets() -> HashMap<String, HashSet<String>> {
             .collect();
         map.insert(norm_subset, norm_supersets);
     }
-    
+
     map
 }
 
@@ -98,7 +97,7 @@ fn build_preferred_superset() -> HashMap<String, String> {
         ("iso-8859-13", "Windows-1257"),
         ("tis-620", "CP874"),
     ];
-    
+
     entries.iter()
         .map(|(k, v)| (k.to_lowercase(), v.to_string()))
         .collect()
@@ -112,7 +111,7 @@ fn build_bidirectional_groups() -> HashMap<String, HashSet<String>> {
         &["iso-2022-jp-2", "iso-2022-jp-2004", "iso-2022-jp-ext"],
         &["cp037", "cp500", "cp1140"],
     ];
-    
+
     let mut map = HashMap::new();
     for group in groups {
         let normalized: HashSet<String> = group.iter()
@@ -133,7 +132,7 @@ fn build_language_equivalences() -> HashMap<String, HashSet<String>> {
         &["ms", "id"],  // Malay / Indonesian
         &["no", "da", "sv"],  // Scandinavian
     ];
-    
+
     let mut map = HashMap::new();
     for group in groups {
         let set: HashSet<String> = group.iter().map(|s| s.to_string()).collect();
@@ -199,29 +198,29 @@ pub fn is_correct(expected: Option<&str>, detected: Option<&str>) -> bool {
         (Some(_), None) => return false,
         (Some(e), Some(d)) => (e, d),
     };
-    
+
     let norm_exp = normalize_encoding_name(expected);
     let norm_det = normalize_encoding_name(detected);
-    
+
     // 1. Exact match
     if norm_exp == norm_det {
         return true;
     }
-    
+
     // 2. Bidirectional (same byte-order group)
     if let Some(group) = BIDIRECTIONAL_GROUPS.get(&norm_exp) {
         if group.contains(&norm_det) {
             return true;
         }
     }
-    
+
     // 3. Superset is acceptable (detected is a known superset of expected)
     if let Some(supersets) = SUPERSETS.get(&norm_exp) {
         if supersets.contains(&norm_det) {
             return true;
         }
     }
-    
+
     false
 }
 
@@ -258,15 +257,15 @@ pub fn is_equivalent_detection(data: &[u8], expected: Option<&str>, detected: Op
         (Some(_), None) => return false,
         (Some(e), Some(d)) => (e, d),
     };
-    
+
     let norm_exp = normalize_encoding_name(expected);
     let norm_det = normalize_encoding_name(detected);
-    
+
     // Already same encoding name
     if norm_exp == norm_det {
         return true;
     }
-    
+
     // Try to decode with both encodings
     let text_exp = match encoding_rs::Encoding::for_label(norm_exp.as_bytes()) {
         Some(enc) => {
@@ -278,7 +277,7 @@ pub fn is_equivalent_detection(data: &[u8], expected: Option<&str>, detected: Op
         }
         None => return false,
     };
-    
+
     let text_det = match encoding_rs::Encoding::for_label(norm_det.as_bytes()) {
         Some(enc) => {
             let (cow, _, had_errors) = enc.decode(data);
@@ -289,17 +288,17 @@ pub fn is_equivalent_detection(data: &[u8], expected: Option<&str>, detected: Op
         }
         None => return false,
     };
-    
+
     // Exact text match
     if text_exp == text_det {
         return true;
     }
-    
+
     // Length mismatch means different text
     if text_exp.len() != text_det.len() {
         return false;
     }
-    
+
     // Check character-level equivalence
     text_exp.chars()
         .zip(text_det.chars())

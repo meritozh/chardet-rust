@@ -159,17 +159,17 @@ impl UniversalDetector {
                 "UniversalDetector.feed() called after close()"
             ));
         }
-        
+
         if self.done {
             return Ok(());
         }
-        
+
         self.buffer.extend_from_slice(byte_str);
-        
+
         if self.buffer.len() >= self.max_bytes {
             self.done = true;
         }
-        
+
         Ok(())
     }
 
@@ -180,7 +180,7 @@ impl UniversalDetector {
             self.result = Some(result);
             self.done = true;
         }
-        
+
         self.closed = true;
         self.result.as_ref().unwrap().to_py_dict(py, self.should_rename_legacy)
     }
@@ -223,11 +223,11 @@ fn _chardet_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(detect_all, m)?)?;
     m.add_function(wrap_pyfunction!(_load_models, m)?)?;
     m.add_function(wrap_pyfunction!(_models_loaded, m)?)?;
-    
+
     // Add classes
     m.add_class::<UniversalDetector>()?;
     m.add_class::<LanguageFilter>()?;
     m.add_class::<EncodingEra>()?;
-    
+
     Ok(())
 }

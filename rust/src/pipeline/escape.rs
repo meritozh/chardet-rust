@@ -199,7 +199,7 @@ fn has_valid_hz_regions(data: &[u8]) -> bool {
 
         // Must be non-empty, even length, and all bytes in GB2312 range
         if region.len() >= 2
-            && region.len() % 2 == 0
+            && region.len().is_multiple_of(2)
             && region.iter().all(|&b| (0x21..=0x7E).contains(&b))
         {
             return true;
@@ -287,7 +287,7 @@ fn has_valid_utf7_sequences(data: &[u8]) -> bool {
         // Check what comes after the base64 sequence
         let next_char = if i < data.len() { Some(data[i]) } else { None };
         let has_explicit_terminator = next_char == Some(b'-');
-        let has_implicit_terminator = next_char.map_or(true, |c| !B64_CHARS.contains(&c));
+        let has_implicit_terminator = next_char.is_none_or(|c| !B64_CHARS.contains(&c));
 
         // A valid UTF-7 sequence must:
         // 1. Have valid base64 content (decodes to valid UTF-16BE)

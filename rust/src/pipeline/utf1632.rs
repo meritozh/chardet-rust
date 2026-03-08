@@ -149,14 +149,12 @@ fn check_utf32(data: &[u8]) -> Option<DetectionResult> {
             .collect();
 
         // Check if all code points are valid Unicode
-        if chunks.iter().all(|&cp| cp <= 0x10FFFF) {
-            if looks_like_text(&chunks) {
-                return Some(DetectionResult::new(
-                    Some("utf-32-be"),
-                    DETERMINISTIC_CONFIDENCE,
-                    None,
-                ));
-            }
+        if chunks.iter().all(|&cp| cp <= 0x10FFFF) && looks_like_text(&chunks) {
+            return Some(DetectionResult::new(
+                Some("utf-32-be"),
+                DETERMINISTIC_CONFIDENCE,
+                None,
+            ));
         }
     }
 
@@ -175,14 +173,12 @@ fn check_utf32(data: &[u8]) -> Option<DetectionResult> {
             .collect();
 
         // Check if all code points are valid Unicode
-        if chunks.iter().all(|&cp| cp <= 0x10FFFF) {
-            if looks_like_text(&chunks) {
-                return Some(DetectionResult::new(
-                    Some("utf-32-le"),
-                    DETERMINISTIC_CONFIDENCE,
-                    None,
-                ));
-            }
+        if chunks.iter().all(|&cp| cp <= 0x10FFFF) && looks_like_text(&chunks) {
+            return Some(DetectionResult::new(
+                Some("utf-32-le"),
+                DETERMINISTIC_CONFIDENCE,
+                None,
+            ));
         }
     }
 
