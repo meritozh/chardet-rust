@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-03-15
+
 ### Security
 
 - **SEC-001**: Added comprehensive input validation at Rust FFI boundary
@@ -176,6 +178,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Key Changes |
 |---------|-------------|-------------|
+| 0.1.11 | 2026-03-15 | Security audit, input validation, exception hierarchy |
 | 0.1.10 | 2026-03-15 | Security hardening |
 | 0.1.9 | 2026-03-10 | Performance improvements |
 | 0.1.8 | 2026-03-05 | UTF-8 edge cases |
