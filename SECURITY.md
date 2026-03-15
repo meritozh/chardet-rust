@@ -70,7 +70,7 @@ The following security improvements are planned. Items are prioritized by severi
 
 | ID | Issue | Status | Tracking |
 |----|-------|--------|----------|
-| SEC-020 | Consolidate duplicate `UniversalDetector` implementations | 🟡 Pending | See consolidation plan below |
+| SEC-020 | Consolidate duplicate `UniversalDetector` implementations | ✅ Fixed | `src/chardet/universal_detector.py` |
 
 ### ✅ Completed (v0.1.13)
 
@@ -88,45 +88,52 @@ The following security improvements are planned. Items are prioritized by severi
 
 ---
 
-## SEC-020 Consolidation Plan
+## SEC-020 Consolidation Plan (✅ Completed)
 
-### Current State
+### Implementation (Completed)
 
-There are **three** UniversalDetector implementations:
+The consolidation has been implemented with a unified `UniversalDetector` class:
 
-1. **`chardet.UniversalDetector`** (`src/chardet/__init__.py`)
-   - Main public API
-   - Wraps Rust implementation (`_UniversalDetectorRs`)
-   - Used when Rust extension is available
+1. **`chardet.UniversalDetector`** (`src/chardet/universal_detector.py`)
+   - Main public API with smart backend selection
+   - Automatically selects Rust (preferred) or Python fallback
+   - Single entry point for all detection needs
 
-2. **`chardet.detector.UniversalDetector`** (`src/chardet/detector.py`)
-   - Pure Python implementation
-   - Fallback when Rust is not available
-   - Has feature parity with Rust version
+2. **`chardet._fallback.UniversalDetector`** (`src/chardet/_fallback.py`)
+   - Pure Python implementation (moved from `chardet.detector`)
+   - Used automatically when Rust extension is unavailable
+   - Maintains feature parity with Rust version
 
 3. **`chardet_rs.UniversalDetector`** (`src/chardet_rs/__init__.py`)
-   - Low-level wrapper around Rust
-   - Mirrors Rust API closely
-   - Used internally by `chardet.UniversalDetector`
+   - Low-level wrapper around Rust (unchanged)
+   - Used internally by the unified implementation
 
-### Consolidation Strategy
+4. **`chardet.detector`** (`src/chardet/detector.py`)
+   - **Deprecated** - emits `DeprecationWarning` on import
+   - Re-exports from `chardet._fallback` for backward compatibility
+   - Will be removed in a future release
 
-**Phase 1** (v0.3.0): Smart Backend Selection
-- Modify `chardet.UniversalDetector` to auto-select backend:
-  - Try Rust implementation first (performance)
-  - Fall back to Python if Rust unavailable
-- Keep `chardet.detector.UniversalDetector` as internal fallback
-- Deprecate direct use of `chardet.detector.UniversalDetector`
+### Migration Path
 
-**Phase 2** (v0.4.0): Unified Implementation
-- Remove `chardet.detector` module
-- Move pure Python implementation to `chardet._fallback`
-- Single `UniversalDetector` class in public API
+**Current (v0.1.11+)**
+```python
+# ✅ Recommended - automatic backend selection
+from chardet import UniversalDetector
 
-**Rationale for Gradual Migration**
+detector = UniversalDetector()
+print(detector.backend)  # 'rust' or 'python'
+```
+
+```python
+# ⚠️ Deprecated - still works but warns
+from chardet.detector import UniversalDetector  # DeprecationWarning
+```
+
+**Benefits**
+- Simpler API - one import path for all use cases
+- Automatic performance optimization (Rust when available)
+- Graceful degradation (Python fallback)
 - Maintains backward compatibility during transition
-- Allows testing of fallback mechanism
-- Minimizes risk of breaking changes
 
 ---
 
