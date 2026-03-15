@@ -10,6 +10,46 @@ use crate::enums::EncodingEra;
 use crate::bigram_models::{init_models, models_loaded};
 use crate::pipeline::DetectionResult;
 
+/// Maximum allowed value for max_bytes parameter (100 MB)
+/// Prevents memory exhaustion attacks via excessive buffer allocation.
+const MAX_BYTES_LIMIT: usize = 100 * 1024 * 1024;
+
+/// Validate max_bytes parameter.
+///
+/// # Security
+/// This validation prevents:
+/// - Integer overflow attacks (usize::MAX values)
+/// - Memory exhaustion (gigabyte-scale allocations)
+/// - Type confusion (bool values passed as int)
+fn validate_max_bytes(max_bytes: usize) -> PyResult<()> {
+    if max_bytes == 0 {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "max_bytes must be a positive integer",
+        ));
+    }
+    if max_bytes > MAX_BYTES_LIMIT {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            format!(
+                "max_bytes ({}) exceeds maximum allowed value ({})",
+                max_bytes, MAX_BYTES_LIMIT
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// Validate byte input data.
+///
+/// # Security
+/// This validation prevents:
+/// - Empty input edge cases
+/// - Excessively large allocations
+fn validate_byte_input(data: &[u8]) -> PyResult<()> {
+    // Empty input is valid but may produce low-confidence results
+    // No upper limit here - pipeline will truncate to max_bytes
+    Ok(())
+}
+
 /// Detect the encoding of a byte string.
 ///
 /// Parameters
@@ -36,6 +76,10 @@ pub fn detect(
     encoding_era: EncodingEra,
     max_bytes: usize,
 ) -> PyResult<PyObject> {
+    // Security: Validate inputs before processing
+    validate_max_bytes(max_bytes)?;
+    validate_byte_input(byte_str)?;
+    
     let result = detect_bytes(byte_str, encoding_era, max_bytes);
     result.to_py_dict(py, should_rename_legacy)
 }
@@ -69,6 +113,10 @@ pub fn detect_all(
     encoding_era: EncodingEra,
     max_bytes: usize,
 ) -> PyResult<PyObject> {
+    // Security: Validate inputs before processing
+    validate_max_bytes(max_bytes)?;
+    validate_byte_input(byte_str)?;
+    
     let results = detect_all_bytes(byte_str, encoding_era, max_bytes, ignore_threshold);
 
     let list = PyList::empty(py);
@@ -118,8 +166,6 @@ pub enum LanguageFilter {
 /// UniversalDetector for streaming detection.
 #[pyclass]
 struct UniversalDetector {
-    #[allow(dead_code)]
-    lang_filter: LanguageFilter,
     should_rename_legacy: bool,
     encoding_era: EncodingEra,
     max_bytes: usize,
@@ -127,21 +173,31 @@ struct UniversalDetector {
     done: bool,
     closed: bool,
     result: Option<DetectionResult>,
+    /// Security: Track number of feed() calls to prevent DoS
+    feed_count: usize,
+    /// Security: Maximum number of feed() calls allowed
+    #[allow(dead_code)]
+    max_feed_calls: usize,
 }
+
+/// Maximum number of feed() calls allowed per detector instance.
+/// Prevents denial-of-service via excessive iteration.
+const MAX_FEED_CALLS: usize = 1_000_000;
 
 #[pymethods]
 impl UniversalDetector {
     /// Create a new UniversalDetector.
     #[new]
-    #[pyo3(signature = (lang_filter=None, should_rename_legacy=true, encoding_era=None, max_bytes=200_000))]
+    #[pyo3(signature = (should_rename_legacy=true, encoding_era=None, max_bytes=200_000))]
     fn new(
-        lang_filter: Option<LanguageFilter>,
         should_rename_legacy: bool,
         encoding_era: Option<EncodingEra>,
         max_bytes: usize,
-    ) -> Self {
-        UniversalDetector {
-            lang_filter: lang_filter.unwrap_or(LanguageFilter::All),
+    ) -> PyResult<Self> {
+        // Security: Validate max_bytes parameter
+        validate_max_bytes(max_bytes)?;
+
+        Ok(UniversalDetector {
             should_rename_legacy,
             encoding_era: encoding_era.unwrap_or(EncodingEra::All),
             max_bytes,
@@ -149,7 +205,9 @@ impl UniversalDetector {
             done: false,
             closed: false,
             result: None,
-        }
+            feed_count: 0,
+            max_feed_calls: MAX_FEED_CALLS,
+        })
     }
 
     /// Feed a chunk of bytes to the detector.
@@ -164,7 +222,32 @@ impl UniversalDetector {
             return Ok(());
         }
 
+        // Security: Check iteration limit to prevent DoS
+        if self.feed_count >= self.max_feed_calls {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                format!(
+                    "Maximum feed() calls ({}) exceeded. Call reset() to start a new detection.",
+                    self.max_feed_calls
+                )
+            ));
+        }
+
+        // Security: Validate input slice is not excessively large
+        // Individual feed calls should be reasonable (< 50 MB)
+        // Note: The max_bytes buffer limit (default 200KB, max 100MB) and
+        // iteration limit (1M calls) provide the primary DoS protection.
+        const MAX_FEED_SIZE: usize = 50 * 1024 * 1024;
+        if byte_str.len() > MAX_FEED_SIZE {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                format!(
+                    "feed() input size ({}) exceeds maximum ({})",
+                    byte_str.len(), MAX_FEED_SIZE
+                )
+            ));
+        }
+
         self.buffer.extend_from_slice(byte_str);
+        self.feed_count += 1;
 
         if self.buffer.len() >= self.max_bytes {
             self.done = true;

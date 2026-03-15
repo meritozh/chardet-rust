@@ -145,7 +145,8 @@ def test_cli_detection_failure_on_file(
         main([str(f)])
     captured = capsys.readouterr()
     assert "detection failed" in captured.err
-    assert "boom" in captured.err
+    # SEC-011: Error messages should not leak internal exception details
+    assert "unexpected error" in captured.err
 
 
 def test_cli_detection_failure_on_stdin(

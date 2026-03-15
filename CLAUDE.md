@@ -100,7 +100,7 @@ Binary file `src/chardet/models/models.bin` — sparse bigram tables loaded via 
 
 ### Public API (`src/chardet/__init__.py`)
 
-- `detect(data, max_bytes, chunk_size, encoding_era)` → `{"encoding": ..., "confidence": ..., "language": ...}`
+- `detect(data, max_bytes, encoding_era)` → `{"encoding": ..., "confidence": ..., "language": ...}`
 - `detect_all(...)` → list of result dicts
 - `UniversalDetector` (`detector.py`) — streaming interface with `feed()`/`close()`/`reset()`
 

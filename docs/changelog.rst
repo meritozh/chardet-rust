@@ -36,9 +36,8 @@ public API — drop-in replacement for chardet 5.x/6.x.
   ``encoding_era=EncodingEra.ALL`` (6.0.0 defaulted to ``MODERN_WEB``)
 - Internal architecture is completely different (probers replaced by
   pipeline stages). Only the public API is preserved.
-- ``LanguageFilter`` is accepted but ignored (deprecation warning
-  emitted)
-- ``chunk_size`` is accepted but ignored (deprecation warning emitted)
+- ``LanguageFilter`` was accepted but ignored (deprecated, removed in 0.1.11)
+- ``chunk_size`` was accepted but ignored (deprecated, removed in 0.1.11)
 
 6.0.0 (2026-02-22)
 -------------------
@@ -55,8 +54,8 @@ public API — drop-in replacement for chardet 5.x/6.x.
   Scottish Gaelic, Serbian, Slovak, Slovene, Spanish, Swedish, Tajik,
   Ukrainian, Vietnamese, Welsh
 - ``EncodingEra`` filtering via new ``encoding_era`` parameter
-- ``max_bytes`` and ``chunk_size`` parameters for ``detect()``,
-  ``detect_all()``, and ``UniversalDetector``
+- ``max_bytes`` parameter for ``detect()``, ``detect_all()``, and
+  ``UniversalDetector``
 - ``-e``/``--encoding-era`` CLI flag
 - EBCDIC detection (CP037, CP500)
 - Direct GB18030 support (replaces redundant GB2312 prober)

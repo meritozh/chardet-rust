@@ -1,12 +1,10 @@
 # tests/test_api.py
 from __future__ import annotations
 
-import warnings
-
 import pytest
 
 import chardet
-from chardet.enums import EncodingEra, LanguageFilter
+from chardet.enums import EncodingEra
 
 
 def test_detect_returns_dict():
@@ -194,32 +192,6 @@ def test_ignore_threshold_fallback():
     assert len(results) >= 1
 
 
-# --- lang_filter DeprecationWarning test ---
-
-
-def test_lang_filter_warning():
-    """Non-ALL lang_filter emits DeprecationWarning."""
-    from chardet.detector import UniversalDetector
-
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        UniversalDetector(lang_filter=LanguageFilter.CJK)
-        assert len(w) == 1
-        assert issubclass(w[0].category, DeprecationWarning)
-        assert "lang_filter" in str(w[0].message)
-
-
-def test_lang_filter_all_no_warning():
-    """ALL lang_filter does not warn."""
-    from chardet.detector import UniversalDetector
-
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        UniversalDetector(lang_filter=LanguageFilter.ALL)
-        dep_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-        assert len(dep_warnings) == 0
-
-
 # --- max_bytes validation tests ---
 
 
@@ -246,26 +218,6 @@ def test_detect_all_max_bytes_zero_raises():
 def test_detect_all_max_bytes_negative_raises():
     with pytest.raises(ValueError, match="max_bytes"):
         chardet.detect_all(b"Hello", max_bytes=-1)
-
-
-# --- chunk_size deprecation tests ---
-
-
-def test_chunk_size_deprecation_warning():
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        chardet.detect(b"Hello", chunk_size=1024)
-        dep = [x for x in w if issubclass(x.category, DeprecationWarning)]
-        assert len(dep) == 1
-        assert "chunk_size" in str(dep[0].message)
-
-
-def test_default_chunk_size_no_warning():
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        chardet.detect(b"Hello")
-        dep = [x for x in w if issubclass(x.category, DeprecationWarning)]
-        assert len(dep) == 0
 
 
 # --- bytearray input tests ---

@@ -1,8 +1,35 @@
 //! UniversalDetector - streaming encoding detection.
 
-use crate::enums::{EncodingEra, LanguageFilter};
+use crate::enums::EncodingEra;
 use crate::pipeline::orchestrator::run_pipeline;
 use crate::pipeline::{DetectionResult, DEFAULT_MAX_BYTES};
+
+/// Maximum allowed value for max_bytes parameter (100 MB)
+/// Prevents memory exhaustion attacks via excessive buffer allocation.
+const MAX_BYTES_LIMIT: usize = 100 * 1024 * 1024;
+
+/// Maximum number of feed() calls allowed per detector instance.
+/// Prevents denial-of-service via excessive iteration.
+const MAX_FEED_CALLS: usize = 1_000_000;
+
+/// Maximum size of individual feed() input (50 MB)
+/// Note: The max_bytes buffer limit (default 200KB, max 100MB) and
+/// iteration limit (1M calls) provide the primary DoS protection.
+const MAX_FEED_SIZE: usize = 50 * 1024 * 1024;
+
+/// Validate max_bytes parameter.
+fn validate_max_bytes(max_bytes: usize) -> Result<(), String> {
+    if max_bytes == 0 {
+        return Err("max_bytes must be a positive integer".to_string());
+    }
+    if max_bytes > MAX_BYTES_LIMIT {
+        return Err(format!(
+            "max_bytes ({}) exceeds maximum allowed value ({})",
+            max_bytes, MAX_BYTES_LIMIT
+        ));
+    }
+    Ok(())
+}
 
 /// Detect the encoding of a byte string.
 pub fn detect_bytes(data: &[u8], encoding_era: EncodingEra, max_bytes: usize) -> DetectionResult {
@@ -64,6 +91,11 @@ pub mod py {
         closed: bool,
         /// Detection result (cached after close).
         result: Option<DetectionResult>,
+        /// Security: Track number of feed() calls to prevent DoS
+        feed_count: usize,
+        /// Security: Maximum number of feed() calls allowed
+        #[allow(dead_code)]
+        max_feed_calls: usize,
     }
 
     #[pymethods]
@@ -71,27 +103,18 @@ pub mod py {
         /// Create a new UniversalDetector.
         #[new]
         #[pyo3(signature = (
-            lang_filter = LanguageFilter::ALL,
             should_rename_legacy = true,
             encoding_era = EncodingEra::All,
             max_bytes = DEFAULT_MAX_BYTES
         ))]
         fn new(
-            lang_filter: LanguageFilter,
             should_rename_legacy: bool,
             encoding_era: EncodingEra,
             max_bytes: usize,
         ) -> PyResult<Self> {
-            // Note: lang_filter is deprecated and ignored
-            if lang_filter != LanguageFilter::ALL {
-                // Would emit deprecation warning in Python
-            }
-
-            if max_bytes < 1 {
-                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                    "max_bytes must be a positive integer",
-                ));
-            }
+            // Security: Validate max_bytes parameter
+            validate_max_bytes(max_bytes)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))?;
 
             Ok(Self {
                 should_rename_legacy,
@@ -101,6 +124,8 @@ pub mod py {
                 done: false,
                 closed: false,
                 result: None,
+                feed_count: 0,
+                max_feed_calls: MAX_FEED_CALLS,
             })
         }
 
@@ -116,11 +141,33 @@ pub mod py {
                 return Ok(());
             }
 
+            // Security: Check iteration limit to prevent DoS
+            if self.feed_count >= self.max_feed_calls {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    format!(
+                        "Maximum feed() calls ({}) exceeded. Call reset() to start a new detection.",
+                        self.max_feed_calls
+                    ),
+                ));
+            }
+
+            // Security: Validate input slice is not excessively large
+            if byte_str.len() > MAX_FEED_SIZE {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    format!(
+                        "feed() input size ({}) exceeds maximum ({})",
+                        byte_str.len(), MAX_FEED_SIZE
+                    ),
+                ));
+            }
+
             let remaining = self.max_bytes.saturating_sub(self.buffer.len());
             if remaining > 0 {
                 self.buffer
                     .extend_from_slice(&byte_str[..byte_str.len().min(remaining)]);
             }
+            
+            self.feed_count += 1;
 
             if self.buffer.len() >= self.max_bytes {
                 self.done = true;

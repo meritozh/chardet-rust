@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.resources
-import warnings
 
 from chardet_rs._chardet_rs import (
     EncodingEra,
@@ -29,8 +28,10 @@ def _init_models():
             if data:
                 _load_models(data)
                 return True
-    except Exception as e:
+    except (OSError, ImportError) as e:
         # Models are optional - log error for debugging but don't fail
+        # OSError: file access errors
+        # ImportError: package import failures
         import warnings
 
         warnings.warn(
@@ -42,7 +43,6 @@ def _init_models():
 
 DEFAULT_MAX_BYTES: int = 200_000
 MINIMUM_THRESHOLD: float = 0.20
-_DEFAULT_CHUNK_SIZE: int = 65_536
 
 # Initialize models (optional - fall back to simplified scoring if not available)
 # This must be done after all module-level constants are defined
@@ -81,30 +81,18 @@ class UniversalDetector:
 
     def __init__(
         self,
-        lang_filter: LanguageFilter = LanguageFilter.ALL,
         should_rename_legacy: bool = True,
         encoding_era: EncodingEra = EncodingEra.ALL,
         max_bytes: int = DEFAULT_MAX_BYTES,
     ) -> None:
         """Initialize the detector.
 
-        :param lang_filter: Deprecated - accepted for backward compatibility
-            but has no effect.
         :param should_rename_legacy: If True (default), remap legacy
             encoding names to their modern equivalents.
         :param encoding_era: Restrict candidate encodings to the given era.
         :param max_bytes: Maximum number of bytes to buffer from feed() calls.
         """
-        if lang_filter != LanguageFilter.ALL:
-            warnings.warn(
-                "lang_filter is not implemented in this version of chardet "
-                "and will be ignored",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
         self._detector = _UniversalDetectorRs(
-            lang_filter=lang_filter,
             should_rename_legacy=should_rename_legacy,
             encoding_era=encoding_era,
             max_bytes=max_bytes,
@@ -152,30 +140,19 @@ def detect(
     byte_str: bytes | bytearray,
     should_rename_legacy: bool = True,
     encoding_era: EncodingEra = EncodingEra.ALL,
-    chunk_size: int = _DEFAULT_CHUNK_SIZE,
     max_bytes: int = DEFAULT_MAX_BYTES,
 ) -> DetectionDict:
     """Detect the encoding of the given byte string.
 
     Parameters match chardet 6.x for backward compatibility.
-    *chunk_size* is accepted but has no effect.
 
     :param byte_str: The byte sequence to detect encoding for.
     :param should_rename_legacy: If True (the default), remap legacy
         encoding names to their modern equivalents.
     :param encoding_era: Restrict candidate encodings to the given era.
-    :param chunk_size: Deprecated - accepted for backward compatibility but
-        has no effect.
     :param max_bytes: Maximum number of bytes to examine from byte_str.
     :returns: A dictionary with keys "encoding", "confidence", and "language".
     """
-    if chunk_size != _DEFAULT_CHUNK_SIZE:
-        warnings.warn(
-            "chunk_size is not used in this version of chardet and will be ignored",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
     if isinstance(byte_str, bytearray):
         byte_str = bytes(byte_str)
 
@@ -192,13 +169,11 @@ def detect_all(
     ignore_threshold: bool = False,
     should_rename_legacy: bool = True,
     encoding_era: EncodingEra = EncodingEra.ALL,
-    chunk_size: int = _DEFAULT_CHUNK_SIZE,
     max_bytes: int = DEFAULT_MAX_BYTES,
 ) -> list[DetectionDict]:
     """Detect all possible encodings of the given byte string.
 
     Parameters match chardet 6.x for backward compatibility.
-    *chunk_size* is accepted but has no effect.
 
     When ignore_threshold is False (the default), results with confidence
     <= MINIMUM_THRESHOLD (0.20) are filtered out. If all results are below
@@ -211,19 +186,10 @@ def detect_all(
     :param should_rename_legacy: If True (the default), remap legacy
         encoding names to their modern equivalents.
     :param encoding_era: Restrict candidate encodings to the given era.
-    :param chunk_size: Deprecated - accepted for backward compatibility but
-        has no effect.
     :param max_bytes: Maximum number of bytes to examine from byte_str.
     :returns: A list of dictionaries, each with keys "encoding",
         "confidence", and "language", sorted by descending confidence.
     """
-    if chunk_size != _DEFAULT_CHUNK_SIZE:
-        warnings.warn(
-            "chunk_size is not used in this version of chardet and will be ignored",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
     if isinstance(byte_str, bytearray):
         byte_str = bytes(byte_str)
 

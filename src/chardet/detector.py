@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
-import warnings
 from types import MappingProxyType
 from typing import ClassVar
 
 from chardet import _utils
 from chardet._utils import DEFAULT_MAX_BYTES, _validate_max_bytes
-from chardet.enums import EncodingEra, LanguageFilter
+from chardet.enums import EncodingEra
 from chardet.equivalences import PREFERRED_SUPERSET, apply_legacy_rename
+from chardet.logging import SecurityEventType, log_resource_limit
 from chardet.pipeline import DetectionDict, DetectionResult
 from chardet.pipeline.orchestrator import run_pipeline
 
 _NONE_RESULT = DetectionResult(encoding=None, confidence=0.0, language=None)
+
+# Security: Maximum number of feed() calls allowed per detector instance.
+# Prevents denial-of-service via excessive iteration.
+_MAX_FEED_CALLS: int = 1_000_000
 
 
 class UniversalDetector:
@@ -41,29 +45,18 @@ class UniversalDetector:
 
     def __init__(
         self,
-        lang_filter: LanguageFilter = LanguageFilter.ALL,
         should_rename_legacy: bool = True,
         encoding_era: EncodingEra = EncodingEra.ALL,
         max_bytes: int = DEFAULT_MAX_BYTES,
     ) -> None:
         """Initialize the detector.
 
-        :param lang_filter: Deprecated -- accepted for backward compatibility
-            but has no effect.  A warning is emitted when set to anything
-            other than :attr:`LanguageFilter.ALL`.
         :param should_rename_legacy: If ``True`` (the default), remap legacy
             encoding names to their modern equivalents.
         :param encoding_era: Restrict candidate encodings to the given era.
         :param max_bytes: Maximum number of bytes to buffer from
             :meth:`feed` calls before stopping accumulation.
         """
-        if lang_filter != LanguageFilter.ALL:
-            warnings.warn(
-                "lang_filter is not implemented in this version of chardet "
-                "and will be ignored",
-                DeprecationWarning,
-                stacklevel=2,
-            )
         self._rename_legacy = should_rename_legacy
         _validate_max_bytes(max_bytes)
         self._encoding_era = encoding_era
@@ -72,6 +65,9 @@ class UniversalDetector:
         self._done = False
         self._closed = False
         self._result: DetectionResult | None = None
+        # Security: Track feed calls to prevent DoS via excessive iteration
+        self._feed_count: int = 0
+        self._max_feed_calls: int = _MAX_FEED_CALLS
 
     def feed(self, byte_str: bytes | bytearray) -> None:
         """Feed a chunk of bytes to the detector.
@@ -82,16 +78,31 @@ class UniversalDetector:
 
         :param byte_str: The next chunk of bytes to examine.
         :raises ValueError: If called after :meth:`close` without a
-            :meth:`reset`.
+            :meth:`reset`, or if maximum feed calls exceeded.
         """
         if self._closed:
             msg = "feed() called after close() without reset()"
             raise ValueError(msg)
         if self._done:
             return
+        
+        # Security: Check iteration limit to prevent DoS
+        if self._feed_count >= self._max_feed_calls:
+            log_resource_limit(
+                "feed_calls",
+                self._feed_count,
+                self._max_feed_calls,
+                "blocked",
+            )
+            raise RuntimeError(
+                f"Maximum feed() calls ({self._max_feed_calls}) exceeded. "
+                "Call reset() to start a new detection."
+            )
+        
         remaining = self._max_bytes - len(self._buffer)
         if remaining > 0:
             self._buffer.extend(byte_str[:remaining])
+        self._feed_count += 1
         if len(self._buffer) >= self._max_bytes:
             self._done = True
 
@@ -117,6 +128,7 @@ class UniversalDetector:
         self._done = False
         self._closed = False
         self._result = None
+        self._feed_count = 0
 
     @property
     def done(self) -> bool:

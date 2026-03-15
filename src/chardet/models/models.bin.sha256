@@ -1,0 +1,11 @@
+# SHA-256 hash for models.bin
+# This file is used to verify the integrity of the bigram model file.
+# 
+# To regenerate this hash if models.bin changes:
+#   sha256sum src/chardet/models/models.bin > src/chardet/models/models.bin.sha256
+#
+# Or on macOS:
+#   shasum -a 256 src/chardet/models/models.bin > src/chardet/models/models.bin.sha256
+#
+# Format: <64-character hex hash>  models.bin
+90421949cfc7380de3fda8e9ce606e6a6e9834562ccbcc8f0b772393d05afb93  models.bin

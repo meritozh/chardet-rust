@@ -145,17 +145,17 @@ require more data to distinguish.
 Deprecated Parameters
 ---------------------
 
-The following parameters are accepted for backward compatibility with
-chardet 5.x/6.x but have no effect:
+The following parameters have been removed as of version 0.1.11:
 
 - ``chunk_size`` on :func:`~chardet.detect` and
-  :func:`~chardet.detect_all` — previously controlled how data was
-  chunked for streaming probers. A deprecation warning is emitted if a
-  non-default value is passed.
-- ``lang_filter`` on :class:`~chardet.UniversalDetector` — previously
-  restricted detection to specific language groups via
-  :class:`~chardet.LanguageFilter`. A deprecation warning is emitted if
-  set to anything other than :attr:`~chardet.LanguageFilter.ALL`.
+  :func:`~chardet.detect_all` — was previously accepted for backward
+  compatibility but had no effect.
+- ``lang_filter`` on :class:`~chardet.UniversalDetector` — was previously
+  accepted to restrict detection to specific language groups via
+  :class:`~chardet.LanguageFilter`.
+
+These parameters were deprecated and emitted warnings when used with non-default
+values. Their removal simplifies the API.
 
 Command-Line Tool
 -----------------

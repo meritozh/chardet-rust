@@ -1,4 +1,23 @@
 //! Bigram model loading and scoring for statistical detection.
+//!
+//! # Security: Model Integrity Verification
+//!
+//! The bigram models are loaded from `models.bin` with SHA-256 hash verification
+//! to ensure file integrity and detect potential tampering. The expected hash
+//! is stored in `src/chardet/models/models.bin.sha256`.
+//!
+//! ## Hash Verification Process
+//!
+//! 1. Before loading models, the SHA-256 hash of `models.bin` is computed
+//! 2. The computed hash is compared against the expected hash
+//! 3. If hashes don't match, loading fails with an error indicating potential tampering
+//!
+//! ## Regenerating the Hash
+//!
+//! If `models.bin` is updated, regenerate the hash file:
+//! ```bash
+//! sha256sum src/chardet/models/models.bin > src/chardet/models/models.bin.sha256
+//! ```
 
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -9,6 +28,16 @@ const BIGRAM_TABLE_SIZE: usize = 65536;
 
 /// Weight applied to non-ASCII bigrams
 pub const NON_ASCII_BIGRAM_WEIGHT: i32 = 8;
+
+/// Expected SHA-256 hash of models.bin for integrity verification.
+/// This hash must match the actual models.bin file to prevent tampering.
+///
+/// To regenerate if models.bin changes:
+/// ```bash
+/// sha256sum src/chardet/models/models.bin
+/// ```
+/// Then update this constant with the new hash.
+const MODELS_BIN_SHA256: &str = "90421949cfc7380de3fda8e9ce606e6a6e9834562ccbcc8f0b772393d05afb93";
 
 /// Cached models
 type ModelsMap = HashMap<String, Vec<u8>>;
@@ -107,8 +136,65 @@ pub fn load_models(data: &[u8]) -> Result<HashMap<String, Vec<u8>>, String> {
     Ok(models)
 }
 
-/// Initialize models from embedded data
+/// Verify the SHA-256 hash of models.bin data.
+///
+/// # Security
+/// This function computes the SHA-256 hash of the provided data and compares
+/// it against the expected hash to detect:
+/// - File corruption during packaging or installation
+/// - Tampering with the model file
+/// - Version mismatches between code and models
+///
+/// # Arguments
+///
+/// * `data` - The raw bytes of models.bin to verify
+///
+/// # Returns
+///
+/// * `Ok(())` if the hash matches
+/// * `Err(String)` if the hash doesn't match, indicating potential tampering
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The computed hash doesn't match the expected hash
+/// - This indicates the models.bin file may have been tampered with
+fn verify_models_hash(data: &[u8]) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+    
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let computed_hash = format!("{:x}", hasher.finalize());
+    
+    if computed_hash != MODELS_BIN_SHA256 {
+        return Err(format!(
+            "models.bin hash verification failed: expected {}, got {}. \
+             The model file may have been tampered with or corrupted.",
+            MODELS_BIN_SHA256, computed_hash
+        ));
+    }
+    
+    Ok(())
+}
+
+/// Initialize models from embedded data.
+///
+/// # Security
+/// Before loading models, this function verifies the SHA-256 hash of the
+/// embedded data to ensure integrity and detect tampering.
+///
+/// # Arguments
+///
+/// * `data` - The raw bytes of models.bin (typically from include_bytes!)
+///
+/// # Returns
+///
+/// * `Ok(())` if models loaded successfully and hash verified
+/// * `Err(String)` if hash verification fails or models fail to load
 pub fn init_models(data: &[u8]) -> Result<(), String> {
+    // Security: Verify hash before loading models
+    verify_models_hash(data)?;
+    
     let models = load_models(data)?;
     let mut cache = MODELS.lock().unwrap();
     *cache = Some(models);
