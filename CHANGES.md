@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-03-15
+
+### Security
+
+- **SEC-020**: Consolidated duplicate `UniversalDetector` implementations
+  - Created unified `UniversalDetector` with automatic backend selection
+  - Automatically selects Rust (performance) or Python fallback
+  - Moved pure Python implementation to `chardet._fallback`
+  - Deprecated `chardet.detector` (emits `DeprecationWarning`)
+  - Single entry point for all detection needs
+
+### Changed
+
+- `chardet.UniversalDetector` now has a `backend` property showing 'rust' or 'python'
+- `chardet.detector` module is deprecated; use `chardet.UniversalDetector` instead
+
 ## [0.1.11] - 2026-03-15
 
 ### Security
@@ -178,6 +194,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Key Changes |
 |---------|-------------|-------------|
+| 0.1.12 | 2026-03-15 | SEC-020: Consolidated UniversalDetector implementations |
 | 0.1.11 | 2026-03-15 | Security audit, input validation, exception hierarchy |
 | 0.1.10 | 2026-03-15 | Security hardening |
 | 0.1.9 | 2026-03-10 | Performance improvements |

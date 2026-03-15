@@ -5,7 +5,7 @@ from __future__ import annotations
 from chardet._utils import _validate_max_bytes
 
 # Version info - keep in sync with pyproject.toml
-__version__ = "0.1.11"
+__version__ = "0.1.12"
 from chardet.enums import (
     EncodingEra,
     _to_rust_encoding_era,
