@@ -1,8 +1,12 @@
-GNU LESSER GENERAL PUBLIC LICENSE
-Version 2.1, February 1999
+Zero-Clause BSD (0BSD)
 
-This project is licensed under the GNU Lesser General Public License,
-version 2.1 or (at your option) any later version ("LGPL-2.1-or-later").
+Permission to use, copy, modify, and/or distribute this software for
+any purpose with or without fee is hereby granted.
 
-You can find the full license text at:
-https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.

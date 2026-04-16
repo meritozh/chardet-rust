@@ -1,182 +1,254 @@
-# chardet-rust
+# chardet-rs
 
-Universal character encoding detector — Rust-powered fork of [chardet 7.0](https://github.com/chardet/chardet).
+A pure Rust implementation of universal character encoding detection. Ported from the Python `chardet` library.
 
-[![License: LGPL--2.1--or--later](https://img.shields.io/badge/License-LGPL--2.1--or--later-blue.svg)](LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/chardet-rust)](https://pypi.org/project/chardet-rust/)
+## Features
 
-> [!NOTE]
-> This is a fork of the [chardet 7.0 rewrite](https://github.com/chardet/chardet).
-> It is published as `chardet-rust` on PyPI and is **not** an official release of the upstream `chardet` project.
-
-> [!WARNING]
-> The upstream chardet 7.0 rewrite is an AI experiment and is not an official upstream replacement.
-
-> [!NOTE]
-> This Rust port was created to the most part with [Kimi](https://www.kimi.com/) (Kimi 2.5).
-
-## Performance (from upstream chardet 7.0)
-
-**98.1% accuracy** on 2,510 test files. **43x faster** than chardet 6.0.0
-and **6.8x faster** than charset-normalizer. **Language detection** for every result. **LGPL licensed.**
-
-|                        | chardet 7.0 (Rust core) | chardet 6.0.0 | [charset-normalizer] |
-| ---------------------- | :----------------------: | :-----------: | :------------------: |
-| Accuracy (2,510 files) |         **98.1%**        |     88.2%     |        78.5%         |
-| Speed                  |       **546 files/s**    |  13 files/s   |      80 files/s      |
-| Language detection     |         **95.1%**        |       --      |          --          |
-| Peak memory            |        **26.2 MiB**      |   29.5 MiB    |      101.2 MiB       |
-| Streaming detection    |          **yes**         |      yes      |          no          |
-| Encoding era filtering |          **yes**         |      no       |          no          |
-| Supported encodings    |            99            |      84       |          99          |
-| License                |           LGPL           |     LGPL      |         MIT          |
-
-[charset-normalizer]: https://github.com/jawah/charset_normalizer
+- Detect encoding from byte streams
+- Support for 60+ encodings including UTF-8/16/32, ISO-8859 series, Windows codepages, EBCDIC, and legacy encodings
+- Multi-stage detection pipeline: BOM → structural → statistical analysis
+- Configurable encoding era filters (modern web, legacy, etc.)
+- Zero dependencies on Python - pure Rust implementation
 
 ## Installation
 
-```bash
-pip install chardet-rust
-```
+Add to your `Cargo.toml`:
 
-For source builds (or editable local development), install a Rust toolchain as
-well, because the extension module is built from `rust/` with `maturin`.
+```toml
+[dependencies]
+chardet-rs = "0.1"
+```
 
 ## Quick Start
 
-```python
-import chardet
+```rust
+use chardet_rs::{detect_bytes, EncodingEra};
 
-# Plain ASCII is reported as its superset Windows-1252 by default,
-# keeping with WHATWG guidelines for encoding detection.
-chardet.detect(b"Hello, world!")
-# {'encoding': 'Windows-1252', 'confidence': 1.0, 'language': 'en'}
+// Detect encoding from bytes
+let result = detect_bytes(b"Hello world", EncodingEra::All, 200_000);
 
-# UTF-8 with typographic punctuation
-chardet.detect("It\u2019s a lovely day \u2014 let\u2019s grab coffee.".encode("utf-8"))
-# {'encoding': 'utf-8', 'confidence': 0.99, 'language': 'es'}
-
-# Japanese EUC-JP
-chardet.detect("これは日本語のテストです。文字コードの検出を行います。".encode("euc-jp"))
-# {'encoding': 'euc-jis-2004', 'confidence': 1.0, 'language': 'ja'}
-
-# Get all candidate encodings ranked by confidence
-text = "Le café est une boisson très populaire en France et dans le monde entier."
-results = chardet.detect_all(text.encode("windows-1252"))
-for r in results:
-    print(r["encoding"], r["confidence"])
-# windows-1252 0.44
-# iso-8859-15 0.44
-# mac-roman 0.42
-# cp858 0.42
+println!("Encoding: {:?}", result.encoding);  // Some("ascii")
+println!("Confidence: {:.2}", result.confidence);  // 1.00
 ```
 
-### Streaming Detection
+## API Reference
 
-For large files or network streams, use `UniversalDetector` to feed data incrementally:
+### Core Functions
 
-```python
-from chardet import UniversalDetector
+#### `detect_bytes`
 
-detector = UniversalDetector()
-with open("unknown.txt", "rb") as f:
-    for line in f:
-        detector.feed(line)
-        if detector.done:
-            break
-result = detector.close()
-print(result)
+Detect the most likely encoding of a byte slice.
+
+```rust
+use chardet_rs::{detect_bytes, EncodingEra};
+
+let result = detect_bytes(
+    b"\xef\xbb\xbfHello",  // UTF-8 with BOM
+    EncodingEra::All,      // Consider all encoding eras
+    200_000                // Max bytes to analyze
+);
+
+assert_eq!(result.encoding, Some("utf-8-sig".to_string()));
+assert_eq!(result.confidence, 1.0);  // BOM = absolute confidence
 ```
 
-## How It Works
+**Parameters:**
+- `data: &[u8]` - Byte slice to analyze
+- `encoding_era: EncodingEra` - Filter for encoding categories (see below)
+- `max_bytes: usize` - Maximum bytes to analyze (default: 200KB)
 
-chardet uses a multi-stage detection pipeline that progresses from cheap deterministic checks to more expensive statistical analysis:
+**Returns:** `DetectionResult` with:
+- `encoding: Option<String>` - Detected encoding name, or `None` for binary
+- `confidence: f64` - Score from 0.0 to 1.0
+- `language: Option<String>` - ISO 639-1 language code if detected
 
-![Detection Pipeline](docs/pipeline_infographic.svg)
+#### `detect_all_bytes`
 
-The pipeline includes: BOM detection, UTF-16/32 pattern analysis, escape sequence detection, binary detection, markup charset extraction, ASCII check, UTF-8 validation, byte validity filtering, CJK structural analysis, statistical scoring with bigram models, and post-processing for confusion resolution.
+Get all candidate encodings sorted by confidence.
 
-See the [full documentation](https://chardet-rust.readthedocs.io/) for details.
+```rust
+use chardet_rs::{detect_all_bytes, EncodingEra};
 
-### Encoding Era Filtering
+let results = detect_all_bytes(
+    b"Héllo wörld café",
+    EncodingEra::All,
+    200_000,
+    false  // Filter results below 20% confidence threshold
+);
 
-Restrict detection to specific encoding eras to reduce false positives:
-
-```python
-from chardet import detect_all
-from chardet.enums import EncodingEra
-
-data = "Москва является столицей Российской Федерации и крупнейшим городом страны.".encode("windows-1251")
-
-# All encoding eras are considered by default — 4 candidates across eras
-for r in detect_all(data):
-    print(r["encoding"], round(r["confidence"], 2))
-# windows-1251 0.5
-# mac-cyrillic 0.47
-# kz-1048 0.22
-# ptcp154 0.22
-
-# Restrict to modern web encodings — 1 confident result
-for r in detect_all(data, encoding_era=EncodingEra.MODERN_WEB):
-    print(r["encoding"], round(r["confidence"], 2))
-# windows-1251 0.5
+for result in &results {
+    println!("{}: {:.2}%", 
+        result.encoding.as_deref().unwrap_or("binary"),
+        result.confidence * 100.0
+    );
+}
 ```
 
-## CLI
+**Parameters:**
+- `data: &[u8]` - Byte slice to analyze
+- `encoding_era: EncodingEra` - Encoding category filter
+- `max_bytes: usize` - Maximum bytes to analyze
+- `ignore_threshold: bool` - If `false`, exclude results with confidence < 0.20
 
-```bash
-chardetect somefile.txt
-# somefile.txt: utf-8 with confidence 0.99
+**Returns:** `Vec<DetectionResult>` sorted by confidence (highest first)
 
-chardetect --minimal somefile.txt
-# utf-8
+### Encoding Era Filter
 
-# Pipe from stdin
-cat somefile.txt | chardetect
+Control which encoding categories to consider:
+
+```rust
+use chardet_rs::EncodingEra;
+
+// Modern web encodings only (UTF-8, Windows-1252, etc.)
+detect_bytes(data, EncodingEra::ModernWeb, max_bytes);
+
+// Include legacy ISO encodings
+detect_bytes(data, EncodingEra::ModernWeb | EncodingEra::LegacyIso, max_bytes);
+
+// All encodings (default)
+detect_bytes(data, EncodingEra::All, max_bytes);
 ```
 
-## What's in chardet 7.0 (upstream)
+**Available Eras:**
 
-- **Rust reimplementation of the detector core** — the full detection pipeline is implemented in `rust/src` and exposed to Python via `chardet_rs._chardet_rs` (PyO3)
-- **Python API compatibility layer** — `detect()`, `detect_all()`, `UniversalDetector`, and `chardetect` keep the familiar chardet API while delegating execution to Rust
-- **12-stage detection pipeline** — BOM detection, structural probing, byte validity filtering, and bigram statistical models are now executed in native code
-- **43x faster** than chardet 6.0.0, **6.8x faster** than charset-normalizer
-- **98.1% accuracy** — +9.9pp vs chardet 6.0.0, +19.6pp vs charset-normalizer
-- **Language detection** — 95.1% accuracy across 49 languages, returned with every result
-- **99 encodings** — full coverage including EBCDIC, Mac, DOS, and Baltic/Central European families
-- **`EncodingEra` filtering** — scope detection to modern web encodings, legacy ISO/Mac/DOS, mainframe, or all
-- **Thread-safe detection calls** — `detect()` and `detect_all()` are safe to call concurrently; free-threaded execution is covered in CI for Python 3.13t
+| Era | Description | Examples |
+|-----|-------------|----------|
+| `ModernWeb` | Modern browser-supported | UTF-8, Windows-1252 |
+| `LegacyIso` | ISO-8859 series | ISO-8859-1, ISO-8859-5 |
+| `LegacyMac` | Classic Mac encodings | MacRoman, MacCyrillic |
+| `LegacyRegional` | Regional legacy | UTF-7, HZ-GB-2312 |
+| `Dos` | DOS codepages | CP437, CP850 |
+| `Mainframe` | EBCDIC | CP273, CP500 |
+| `All` | All encodings | Default, all above |
 
-## License Discussion
+### DetectionResult
 
-There is an active licensing dispute around the upstream chardet 7.0 AI-assisted rewrite.
+```rust
+pub struct DetectionResult {
+    pub encoding: Option<String>,  // Encoding name or None for binary
+    pub confidence: f64,           // 0.0 to 1.0
+    pub language: Option<String>,  // ISO 639-1 code (e.g., "en", "ru")
+}
+```
 
-### Timeline
+**Confidence Levels:**
+- `1.0` - Absolute confidence (BOM detection)
+- `0.95` - High confidence (structural detection)
+- `0.50-0.95` - Good confidence (statistical match)
+- `<0.20` - Low confidence (filtered out by default)
 
-- On **March 4, 2026**, [issue #327](https://github.com/chardet/chardet/issues/327) was opened by a user identifying as Mark Pilgrim (original chardet author), arguing that relicensing from LGPL to MIT is not permitted.
-- On **March 6, 2026**, [The Register article](https://www.theregister.com/2026/03/06/ai_kills_software_licensing/) reported the dispute and included statements from multiple people in the OSS ecosystem.
+## Examples
 
-### Core Disagreement
+### UTF-8 Detection
 
-- **Relicensing claim:** maintainers stated the new version is a sufficiently new implementation and can be MIT-licensed.
-- **Derivative-work claim:** critics argue the rewrite remains derivative of prior LGPL work because of project continuity, prior code exposure, and intentional API/behavior compatibility.
-- **Clean-room dispute:** one side treats AI-assisted regeneration plus low similarity metrics as evidence of independence; the other side argues that AI training provenance and maintainer prior exposure weaken clean-room arguments.
+```rust
+use chardet_rs::{detect_bytes, EncodingEra};
 
-### Points Raised in Public Discussion
+// UTF-8 with multibyte characters
+let text = "Héllo wörld café".as_bytes();
+let result = detect_bytes(text, EncodingEra::All, 200_000);
+assert_eq!(result.encoding, Some("utf-8".to_string()));
 
-- Similarity analysis (for example, references to JPlag comparisons) was cited as evidence that 7.0 differs structurally from prior versions.
-- Counterarguments focused less on line-by-line similarity and more on copyright/licensing doctrine for derivative works.
-- Broader concerns were raised about whether AI-assisted rewrites could undermine copyleft obligations in practice.
-- The Register also framed this as part of a larger unresolved legal question: how copyright and licensing apply when code is heavily AI-assisted.
+// UTF-8 with BOM
+let result = detect_bytes(b"\xef\xbb\xbfHello", EncodingEra::All, 200_000);
+assert_eq!(result.encoding, Some("utf-8-sig".to_string()));
+assert_eq!(result.confidence, 1.0);
+```
 
-### Current Status
+### Legacy Encoding Detection
 
-- The disagreement is public and unresolved.
-- This repository includes this summary for transparency and context.
-- If licensing compliance is material to your use case, obtain legal advice before adoption.
+```rust
+use chardet_rs::{detect_bytes, EncodingEra};
 
-This section is informational only and is not legal advice.
+// UTF-7 (requires LegacyRegional era)
+let utf7_data = b"Hello, +ZeVnLIqe-!";
+let result = detect_bytes(utf7_data, EncodingEra::All, 200_000);
+assert_eq!(result.encoding, Some("utf-7".to_string()));
+
+// Won't detect UTF-7 with ModernWeb filter (deprecated in browsers)
+let result = detect_bytes(utf7_data, EncodingEra::ModernWeb, 200_000);
+assert_ne!(result.encoding, Some("utf-7".to_string()));
+```
+
+### Binary Detection
+
+```rust
+use chardet_rs::{detect_bytes, EncodingEra};
+
+let binary_data = &[0x00, 0xFF, 0xFE, 0x00, 0x01, 0x02];
+let result = detect_bytes(binary_data, EncodingEra::All, 200_000);
+
+assert_eq!(result.encoding, None);  // Binary content
+```
+
+### Encoding from File
+
+```rust
+use std::fs::File;
+use std::io::Read;
+use chardet_rs::{detect_bytes, EncodingEra};
+
+let mut file = File::open("document.txt")?;
+let mut buffer = Vec::new();
+file.read_to_end(&mut buffer)?;
+
+let result = detect_bytes(&buffer, EncodingEra::All, 200_000);
+println!("Detected: {:?}", result.encoding);
+```
+
+### Large Files
+
+For large files, limit analysis to first N bytes:
+
+```rust
+use chardet_rs::{detect_bytes, EncodingEra};
+
+// Only analyze first 50KB (faster for large files)
+let result = detect_bytes(&large_data, EncodingEra::All, 50_000);
+```
+
+## Detection Pipeline
+
+The library uses a multi-stage detection pipeline:
+
+1. **Stage 0: Deterministic Detection**
+   - BOM detection (UTF-8/16/32)
+   - UTF-16/32 pattern detection
+   - Binary detection
+   - Escape sequence encodings (ISO-2022, HZ-GB-2312, UTF-7)
+
+2. **Stage 1: Markup & Basic**
+   - HTML/XML charset extraction
+   - ASCII detection
+   - UTF-8 validation
+
+3. **Stage 2: Structural Analysis**
+   - Byte validity filtering
+   - CJK multi-byte structural probing
+
+4. **Stage 3: Statistical Analysis**
+   - Bigram model scoring
+   - Confusion group resolution
+
+Most detections complete at early stages for efficiency.
+
+## Supported Encodings
+
+- **Unicode:** UTF-8, UTF-8-SIG, UTF-16, UTF-16BE, UTF-16LE, UTF-32, UTF-32BE, UTF-32LE
+- **Western:** ISO-8859-1, ISO-8859-15, Windows-1252
+- **Eastern European:** ISO-8859-2, Windows-1250
+- **Russian:** ISO-8859-5, Windows-1251, KOI8-R, MacCyrillic
+- **Greek:** ISO-8859-7, Windows-1253
+- **Turkish:** ISO-8859-9, Windows-1254
+- **Chinese:** GB2312, GB18030, Big5, HZ-GB-2312
+- **Japanese:** Shift_JIS, EUC-JP, ISO-2022-JP
+- **Korean:** EUC-KR, ISO-2022-KR
+- **Legacy:** UTF-7, MacRoman, CP437, EBCDIC variants
 
 ## License
 
-[LGPL](LICENSE)
+0BSD - Free for any use. No restrictions.
+
+## Credits
+
+Ported from Python `chardet` library. Original implementation by Dan Blanchard.
