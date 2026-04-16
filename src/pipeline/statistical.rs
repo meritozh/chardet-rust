@@ -24,8 +24,7 @@ use std::sync::OnceLock;
 static MODEL_INIT_RESULT: OnceLock<Result<(), String>> = OnceLock::new();
 
 fn ensure_models_loaded() {
-    let _ = MODEL_INIT_RESULT
-        .get_or_init(|| init_models(include_bytes!("../../../src/chardet/models/models.bin")));
+    let _ = MODEL_INIT_RESULT.get_or_init(|| init_models(include_bytes!("../models/models.bin")));
 }
 
 /// Score all candidates and return results sorted by confidence descending.
